@@ -1,0 +1,16 @@
+{
+  "name": "Nako taxi rank network",
+  "short_name": "Nako",
+  "description": "Find a taxi, kombi, or coach corridor in Botswana.",
+  "start_url": "./app/",
+  "scope": "./",
+  "id": "./app/",
+  "display": "standalone",
+  "background_color": "#f3f7fb",
+  "theme_color": "#1657d6",
+  "lang": "en",
+  "icons": [
+    { "src": "./assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "nako",
+  "private": true,
+  "type": "module",
+  "description": "Nako digital taxi-rank network, phase one."
+}

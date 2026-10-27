@@ -328,11 +328,112 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   font-weight: 700;
 }
 
-.roadmap-grid {
+.road-tree-band { overflow: hidden; }
+.road-tree-intro { max-width: 42rem; }
+.road-tree {
+  position: relative;
+  margin-top: 40px;
+  padding: 8px 0 24px;
+}
+.road-trunk {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  transform: translateX(-50%);
+  background: rgba(117, 170, 219, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+  z-index: 0;
+}
+.road-trunk-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 0%;
+  background: linear-gradient(180deg, var(--sky), #4ea1ff);
+  border-radius: inherit;
+  transform-origin: top center;
+}
+.road-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin-top: 32px;
+  gap: 28px;
+  position: relative;
+  z-index: 1;
+}
+.road-node {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  position: relative;
+  opacity: 0;
+  transform: translate3d(-40px, 0, 0);
+  will-change: transform, opacity;
+}
+.road-node.side-right {
+  transform: translate3d(40px, 0, 0);
+}
+.road-node.is-on {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.road-node .road-card {
+  grid-column: 1;
+  justify-self: end;
+  width: min(100%, 420px);
+  margin-right: 28px;
+}
+.road-node.side-right .road-card {
+  grid-column: 2;
+  justify-self: start;
+  margin-right: 0;
+  margin-left: 28px;
+}
+.road-branch {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 2px;
+  background: var(--sky);
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+  opacity: 0.85;
+}
+.road-node.side-left .road-branch {
+  left: auto;
+  right: 50%;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: right center;
+}
+.road-node.is-on .road-branch {
+  transform: translateY(-50%) scaleX(1);
+}
+.road-node::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--sky);
+  border: 3px solid #0b1c2c;
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 0;
+  z-index: 2;
+  box-shadow: 0 0 0 0 rgba(117, 170, 219, 0.35);
+}
+.road-node.is-on::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  box-shadow: 0 0 0 8px rgba(117, 170, 219, 0.12);
 }
 .road-card {
   padding: 22px 18px;
@@ -340,11 +441,10 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   background: #143047;
   border: 1px solid #234863;
   box-shadow: 0 16px 28px rgba(0, 0, 0, 0.18);
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
-.road-card:hover {
-  transform: translateY(-8px);
-  border-color: var(--sky);
+.road-node.is-on .road-card {
+  border-color: rgba(117, 170, 219, 0.55);
   background: #183851;
 }
 .road-card .n {
@@ -1227,9 +1327,34 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   .hero-body { padding-top: 4px; }
   .hero-layout,
   .promise-grid,
-  .roadmap-grid,
   .install-panel,
   .demo-shell { grid-template-columns: 1fr; }
+  .road-trunk { left: 18px; transform: none; }
+  .road-node,
+  .road-node.side-right {
+    grid-template-columns: 1fr;
+    transform: translateX(-28px);
+  }
+  .road-node .road-card,
+  .road-node.side-right .road-card {
+    grid-column: 1;
+    justify-self: stretch;
+    width: 100%;
+    margin: 0 0 0 36px;
+  }
+  .road-branch,
+  .road-node.side-left .road-branch {
+    left: 18px;
+    right: auto;
+    width: 22px;
+    transform: translateY(-50%) scaleX(0);
+    transform-origin: left center;
+  }
+  .road-node.is-on .road-branch,
+  .road-node.side-left.is-on .road-branch {
+    transform: translateY(-50%) scaleX(1);
+  }
+  .road-node::after { left: 18px; }
   .hero-layout { gap: 16px; padding: 4px 0 0; text-align: center; }
   .hero-copy { margin-inline: auto; }
   .hero-copy p { margin-inline: auto; }
@@ -1249,5 +1374,15 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   .process-card, .process-finger, .process-pin-drop, .process-radar,
   .process-match-line, .process-spark, .process-dot, .process-waiting, .pulse-ring {
     transition: none; animation: none !important;
+  }
+  .road-node {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .road-trunk-fill { height: 100% !important; }
+  .road-branch { transform: translateY(-50%) scaleX(1) !important; }
+  .road-node::after {
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) scale(1) !important;
   }
 }

@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Nako">
-  <link rel="stylesheet" href="./assets/css/landing.css?v=10">
+  <link rel="stylesheet" href="./assets/css/landing.css?v=11">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="landing">
@@ -280,21 +280,91 @@
       </div>
     </section>
 
-    <section class="band dark" id="roadmap">
-      <div class="shell">
-        <p class="band-kicker reveal" data-i18n="network">The network</p>
-        <h2 class="reveal" data-i18n="roadTitle">Built for ranks. Growing with the association.</h2>
-        <p class="lead reveal" data-i18n="roadLead">Nine pieces of the full Nako network. Hover a card to see where each one sits.</p>
-        <div class="roadmap-grid">
-          <article class="road-card reveal"><span class="n">1</span><h3 data-i18n="road1">Auth + roles</h3><p data-i18n="road1Body">Passenger, driver, fleet owner, and association each get their own door.</p></article>
-          <article class="road-card reveal"><span class="n">2</span><h3 data-i18n="road2">Drivers + vehicles</h3><p data-i18n="road2Body">Register drivers and keep vehicle details where the rank can see them.</p></article>
-          <article class="road-card reveal"><span class="n">3</span><h3 data-i18n="road3">Taxi ranks</h3><p data-i18n="road3Body">Digitise the ranks so people know what is waiting before they walk over.</p></article>
-          <article class="road-card reveal"><span class="n">4</span><h3 data-i18n="road4">Online GPS</h3><p data-i18n="road4Body">Live vehicle location and status once the trackers are fitted.</p></article>
-          <article class="road-card reveal"><span class="n">5</span><h3 data-i18n="road5">Rank check-in</h3><p data-i18n="road5Body">Drivers check in and out at the rank with QR or location.</p></article>
-          <article class="road-card reveal"><span class="n">6</span><h3 data-i18n="road6">Passenger discovery</h3><p data-i18n="road6Body">Find nearby ranks and available taxis without calling around.</p></article>
-          <article class="road-card reveal"><span class="n">7</span><h3 data-i18n="road7">QR verification</h3><p data-i18n="road7Body">Scan a vehicle and confirm it belongs on the platform.</p></article>
-          <article class="road-card reveal"><span class="n">8</span><h3 data-i18n="road8">Owner dashboard</h3><p data-i18n="road8Body">Fleet owners watch performance without standing at the rank all day.</p></article>
-          <article class="road-card reveal"><span class="n">9</span><h3 data-i18n="road9">Association tools</h3><p data-i18n="road9Body">Monitor ranks, drivers, routes, and compliance from one place.</p></article>
+    <section class="band dark road-tree-band" id="roadmap">
+      <div class="shell road-tree-shell">
+        <div class="road-tree-intro">
+          <p class="band-kicker reveal" data-i18n="network">The network</p>
+          <h2 class="reveal" data-i18n="roadTitle">Built for ranks. Growing with the association.</h2>
+          <p class="lead reveal" data-i18n="roadLead">Nine pieces of the full Nako network. Scroll to watch each branch open left to right.</p>
+        </div>
+        <div class="road-tree" id="road-tree">
+          <div class="road-trunk" aria-hidden="true">
+            <div class="road-trunk-fill" id="road-trunk-fill"></div>
+          </div>
+          <ol class="road-tree-list">
+            <li class="road-node side-left" data-step="0">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">1</span>
+                <h3 data-i18n="road1">Auth + roles</h3>
+                <p data-i18n="road1Body">Passenger, driver, fleet owner, and association each get their own door.</p>
+              </article>
+            </li>
+            <li class="road-node side-right" data-step="1">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">2</span>
+                <h3 data-i18n="road2">Drivers + vehicles</h3>
+                <p data-i18n="road2Body">Register drivers and keep vehicle details where the rank can see them.</p>
+              </article>
+            </li>
+            <li class="road-node side-left" data-step="2">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">3</span>
+                <h3 data-i18n="road3">Taxi ranks</h3>
+                <p data-i18n="road3Body">Digitise the ranks so people know what is waiting before they walk over.</p>
+              </article>
+            </li>
+            <li class="road-node side-right" data-step="3">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">4</span>
+                <h3 data-i18n="road4">Online GPS</h3>
+                <p data-i18n="road4Body">Live vehicle location and status once the trackers are fitted.</p>
+              </article>
+            </li>
+            <li class="road-node side-left" data-step="4">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">5</span>
+                <h3 data-i18n="road5">Rank check-in</h3>
+                <p data-i18n="road5Body">Drivers check in and out at the rank with QR or location.</p>
+              </article>
+            </li>
+            <li class="road-node side-right" data-step="5">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">6</span>
+                <h3 data-i18n="road6">Passenger discovery</h3>
+                <p data-i18n="road6Body">Find nearby ranks and available taxis without calling around.</p>
+              </article>
+            </li>
+            <li class="road-node side-left" data-step="6">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">7</span>
+                <h3 data-i18n="road7">QR verification</h3>
+                <p data-i18n="road7Body">Scan a vehicle and confirm it belongs on the platform.</p>
+              </article>
+            </li>
+            <li class="road-node side-right" data-step="7">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">8</span>
+                <h3 data-i18n="road8">Owner dashboard</h3>
+                <p data-i18n="road8Body">Fleet owners watch performance without standing at the rank all day.</p>
+              </article>
+            </li>
+            <li class="road-node side-left" data-step="8">
+              <span class="road-branch" aria-hidden="true"></span>
+              <article class="road-card">
+                <span class="n">9</span>
+                <h3 data-i18n="road9">Association tools</h3>
+                <p data-i18n="road9Body">Monitor ranks, drivers, routes, and compliance from one place.</p>
+              </article>
+            </li>
+          </ol>
         </div>
       </div>
     </section>
@@ -359,6 +429,6 @@
   <script src="./vendor/gsap.min.js"></script>
   <script src="./vendor/ScrollTrigger.min.js"></script>
   <script type="module" src="./src/js/home.js"></script>
-  <script type="module" src="./src/js/landing.js?v=10"></script>
+  <script type="module" src="./src/js/landing.js?v=11"></script>
 </body>
 </html>

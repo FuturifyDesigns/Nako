@@ -4,6 +4,7 @@ import { applyLandingI18n, initLang, t, toggleLang } from "./i18n.js";
 initLang();
 applyLandingI18n();
 initDemo();
+initRoadTree();
 
 const langBtn = document.querySelector("#lang-toggle");
 if (langBtn) {
@@ -16,7 +17,9 @@ if (langBtn) {
   });
 }
 
-const nodes = [...document.querySelectorAll(".reveal")];
+const nodes = [...document.querySelectorAll(".reveal")].filter(
+  (node) => !node.closest(".road-node")
+);
 
 if (!nodes.length) {
   /* nothing to animate */
@@ -77,4 +80,82 @@ if (!nodes.length) {
       node.style.transform = "none";
     });
   });
+}
+
+function initRoadTree() {
+  const tree = document.querySelector("#road-tree");
+  const trunkFill = document.querySelector("#road-trunk-fill");
+  const items = [...document.querySelectorAll(".road-node")];
+  if (!tree || !items.length) return;
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    items.forEach((item) => item.classList.add("is-on"));
+    if (trunkFill) trunkFill.style.height = "100%";
+    return;
+  }
+
+  items.forEach((item) => {
+    item.style.transition =
+      "opacity 520ms ease, transform 620ms cubic-bezier(.2,.8,.2,1)";
+  });
+  document.querySelectorAll(".road-branch").forEach((branch) => {
+    branch.style.transition = "transform 480ms ease";
+  });
+
+  if (window.gsap && window.ScrollTrigger) {
+    window.gsap.registerPlugin(window.ScrollTrigger);
+    if (trunkFill) window.gsap.set(trunkFill, { height: "0%" });
+
+    const tl = window.gsap.timeline({
+      scrollTrigger: {
+        trigger: tree,
+        start: "top 72%",
+        end: "bottom 28%",
+        scrub: 0.65
+      }
+    });
+
+    if (trunkFill) {
+      tl.to(trunkFill, { height: "100%", ease: "none", duration: items.length }, 0);
+    }
+
+    items.forEach((item, i) => {
+      const fromX = item.classList.contains("side-right") ? 56 : -56;
+      window.gsap.set(item, { opacity: 0, x: fromX });
+      tl.to(
+        item,
+        {
+          opacity: 1,
+          x: 0,
+          duration: 1,
+          ease: "power2.out",
+          onUpdate() {
+            item.classList.toggle("is-on", this.progress() > 0.35);
+          }
+        },
+        i * 0.9
+      );
+    });
+    return;
+  }
+
+  // Fallback: progressive left→right reveal while scrolling the tree
+  const sync = () => {
+    const rect = tree.getBoundingClientRect();
+    const view = window.innerHeight || 1;
+    const start = view * 0.78;
+    const end = view * 0.22;
+    const raw = (start - rect.top) / (start - end + rect.height);
+    const progress = Math.max(0, Math.min(1, raw));
+    if (trunkFill) trunkFill.style.height = `${progress * 100}%`;
+    const count = items.length;
+    items.forEach((item, i) => {
+      const threshold = (i + 0.15) / count;
+      item.classList.toggle("is-on", progress >= threshold);
+    });
+  };
+  sync();
+  window.addEventListener("scroll", sync, { passive: true });
+  window.addEventListener("resize", sync);
 }

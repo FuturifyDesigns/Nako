@@ -34,16 +34,6 @@ button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparen
 a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 :focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
 
-.flag-bar {
-  display: grid;
-  grid-template-rows: 10px 4px 8px 4px 10px;
-}
-.flag-bar span:nth-child(1),
-.flag-bar span:nth-child(5) { background: var(--sky); }
-.flag-bar span:nth-child(2),
-.flag-bar span:nth-child(4) { background: #fff; }
-.flag-bar span:nth-child(3) { background: #111; }
-
 .shell {
   width: min(1040px, calc(100% - 48px));
   margin: 0 auto;
@@ -54,7 +44,7 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 0 8px;
+  padding: 16px 0 0;
   position: relative;
   z-index: 3;
 }
@@ -99,10 +89,10 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
 
 .hero {
   position: relative;
-  min-height: min(78vh, 720px);
+  min-height: 0;
   display: grid;
   align-content: start;
-  padding: 8px 0 72px;
+  padding: 0 0 48px;
   isolation: isolate;
   background: #5fa3d0;
   overflow: hidden;
@@ -118,7 +108,7 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(7, 22, 38, 0.48);
+  background: rgba(7, 22, 38, 0.42);
 }
 .hero::after {
   content: "";
@@ -126,27 +116,27 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
   left: 0;
   right: 0;
   bottom: 0;
-  height: 14px;
+  height: 10px;
   z-index: 3;
   background: #111;
-  box-shadow: 0 -5px 0 #fff;
+  box-shadow: 0 -4px 0 #fff;
 }
 .topbar .brand-copy strong { color: #fff; }
 .topbar .brand-copy span { color: #e8f4fc; }
 .hero-body {
   position: relative;
   z-index: 2;
-  padding-top: 28px;
+  padding-top: 8px;
   display: grid;
   align-items: center;
-  min-height: calc(min(78vh, 720px) - 120px);
+  min-height: 0;
 }
 .hero-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 440px) minmax(0, 1fr);
-  gap: 40px 64px;
+  grid-template-columns: minmax(240px, 400px) minmax(0, 1fr);
+  gap: 24px 48px;
   align-items: center;
-  padding: 28px 0 18px;
+  padding: 8px 0 0;
 }
 .hero-mark-wrap {
   display: grid;
@@ -162,7 +152,7 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
 }
 .hero-copy { max-width: 640px; color: #fff; }
 .hero-copy .eyebrow {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -172,7 +162,7 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
 .hero-copy h1 {
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(44px, 7vw, 76px);
+  font-size: clamp(40px, 6.4vw, 70px);
   line-height: 0.94;
   letter-spacing: -0.05em;
   color: #fff;
@@ -180,13 +170,17 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
 }
 .hero-copy h1 em {
   font-style: normal;
-  color: #ffe08a;
+  color: #9fd4ff;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.12em;
+  text-decoration-color: rgba(159, 212, 255, 0.85);
 }
 .hero-copy p {
-  margin: 20px 0 0;
+  margin: 14px 0 0;
   max-width: 34rem;
-  font-size: clamp(17px, 1.9vw, 21px);
-  line-height: 1.5;
+  font-size: clamp(16px, 1.8vw, 20px);
+  line-height: 1.45;
   font-weight: 650;
   color: #f3f8fc;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.25);
@@ -196,7 +190,7 @@ a, .cta, .lang-toggle { -webkit-tap-highlight-color: transparent; touch-action: 
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-  margin-top: 28px;
+  margin-top: 20px;
 }
 .cta {
   appearance: none;
@@ -238,7 +232,7 @@ body[data-device="desktop"] #install-button { display: none !important; }
 body[data-device="handheld"] #desktop-install-note { display: none !important; }
 
 .band {
-  padding: 72px 0;
+  padding: 56px 0;
   position: relative;
 }
 .band.sky {
@@ -528,18 +522,12 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 
 @media (max-width: 900px) {
   .shell { width: min(1040px, calc(100% - 28px)); }
-  .hero {
-    min-height: auto;
-  }
-  .hero-body {
-    min-height: 0;
-    padding-top: 12px;
-  }
+  .hero-body { padding-top: 4px; }
   .hero-layout,
   .promise-grid,
   .roadmap-grid,
   .install-panel { grid-template-columns: 1fr; }
-  .hero-layout { gap: 28px; padding: 12px 0 8px; text-align: center; }
+  .hero-layout { gap: 16px; padding: 4px 0 0; text-align: center; }
   .hero-copy { margin-inline: auto; }
   .hero-copy p { margin-inline: auto; }
   .cta-row { justify-content: center; }

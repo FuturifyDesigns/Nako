@@ -74,7 +74,7 @@ function renderLogin(root, client) {
 }
 
 function brand() {
-  const mark = el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png", alt: "", width: "40", height: "40" });
+  const mark = el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png?v=5", alt: "", width: "40", height: "40" });
   return el("div", { class: "brand" }, [
     mark,
     el("span", { class: "brand-name", text: "Nako" }),

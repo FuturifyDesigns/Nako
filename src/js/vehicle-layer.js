@@ -33,7 +33,7 @@ function makeEl(vehicle, selected) {
   wrap.setAttribute("aria-label", `${type} ${vehicle.plate || ""}`.trim());
   wrap.style.width = `${width}px`;
   const img = document.createElement("img");
-  img.src = `${assetFor(type)}?v=1`;
+  img.src = `${assetFor(type)}?v=2`;
   img.alt = "";
   img.draggable = false;
   img.width = width;

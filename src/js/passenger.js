@@ -117,6 +117,11 @@ export async function mountPassenger(root) {
     pinBtn.replaceChildren(icon("pin"), document.createTextNode(t("pinMap")));
     findBtn.replaceChildren(icon("plane"), document.createTextNode(t("findTransport")));
     clear(typeGrid);
+    const art = {
+      taxi: "../assets/vehicles/taxi-mark.png?v=4",
+      kombi: "../assets/vehicles/kombi-mark.png?v=4",
+      bus: "../assets/vehicles/bus-mark.png?v=4"
+    };
     for (const type of typeMeta()) {
       const button = el("button", {
         type: "button",
@@ -124,7 +129,7 @@ export async function mountPassenger(root) {
         "aria-pressed": type.id === state.transport ? "true" : "false",
         onclick: () => selectTransport(type.id)
       }, [
-        el("span", { class: "type-art", "aria-hidden": "true" }),
+        el("img", { class: "type-art", src: art[type.id], alt: "", width: "96", height: "64", draggable: "false" }),
         el("strong", { text: type.name }),
         el("span", { text: type.detail })
       ]);
@@ -719,7 +724,7 @@ export async function mountPassenger(root) {
 
     map = new maplibregl.Map({
       container: mapCanvas,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/bright",
       center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
       zoom: 14.4,
       pitch: 0,

@@ -1,106 +1,150 @@
 const ASSETS = {
-  taxi: "../assets/vehicles/taxi-mark.png",
-  kombi: "../assets/vehicles/kombi-mark.png",
-  bus: "../assets/vehicles/bus-mark.png"
+  taxi: "../assets/vehicles/taxi-mark.png?v=5",
+  kombi: "../assets/vehicles/kombi-mark.png?v=5",
+  bus: "../assets/vehicles/bus-mark.png?v=5"
 };
 
-const SIZES = {
-  taxi: 40,
-  kombi: 46,
-  bus: 52
-};
+const SOURCE_ID = "nako-vehicles";
+const HALO_ID = "nako-vehicles-halo";
+const LAYER_ID = "nako-vehicles-icons";
 
-function assetFor(type) {
-  if (type === "taxi") return ASSETS.taxi;
-  if (type === "bus") return ASSETS.bus;
-  return ASSETS.kombi;
+function iconId(type) {
+  if (type === "taxi") return "nako-taxi";
+  if (type === "bus") return "nako-bus";
+  return "nako-kombi";
 }
 
-function sizeFor(type) {
-  if (type === "taxi") return SIZES.taxi;
-  if (type === "bus") return SIZES.bus;
-  return SIZES.kombi;
+function loadImage(map, url) {
+  return map.loadImage(url).then((result) => result?.data || result);
 }
 
-function makeEl(vehicle, selected) {
-  const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
-  const width = sizeFor(type);
-  const wrap = document.createElement("button");
-  wrap.type = "button";
-  wrap.className = `vehicle-marker${selected ? " is-selected" : ""}`;
-  wrap.dataset.id = vehicle.id;
-  wrap.dataset.type = type;
-  wrap.setAttribute("aria-label", `${type} ${vehicle.plate || ""}`.trim());
-  wrap.style.width = `${width}px`;
-  const img = document.createElement("img");
-  img.src = `${assetFor(type)}?v=3`;
-  img.alt = "";
-  img.draggable = false;
-  img.width = width;
-  img.height = Math.round(width * 0.66);
-  wrap.append(img);
-  return wrap;
-}
-
-export function createVehicleLayer(map, maplibregl, { onSelect } = {}) {
-  const markers = new Map();
-  let selected = null;
-  let vehicles = [];
-
-  function sync() {
-    const seen = new Set();
-    vehicles.forEach((vehicle) => {
+function toFeatureCollection(vehicles, selected) {
+  return {
+    type: "FeatureCollection",
+    features: (vehicles || []).map((vehicle) => {
       const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
-      seen.add(vehicle.id);
-      let entry = markers.get(vehicle.id);
-      if (!entry || entry.type !== type) {
-        entry?.marker.remove();
-        const el = makeEl(vehicle, vehicle.id === selected);
-        el.addEventListener("click", (event) => {
-          event.stopPropagation();
-          onSelect?.(vehicle);
-        });
-        // Anchor dead-center on geo coords so zoom never drifts the marker.
-        const marker = new maplibregl.Marker({
-          element: el,
-          anchor: "center",
-          offset: [0, 0],
-          pitchAlignment: "map",
-          rotationAlignment: "map"
-        })
-          .setLngLat([vehicle.lng, vehicle.lat])
-          .addTo(map);
-        entry = { marker, el, type };
-        markers.set(vehicle.id, entry);
-      } else {
-        entry.marker.setLngLat([vehicle.lng, vehicle.lat]);
-        entry.el.classList.toggle("is-selected", vehicle.id === selected);
-      }
-    });
-    for (const [id, entry] of markers) {
-      if (!seen.has(id)) {
-        entry.marker.remove();
-        markers.delete(id);
+      return {
+        type: "Feature",
+        id: vehicle.id,
+        properties: {
+          id: vehicle.id,
+          icon: iconId(type),
+          selected: vehicle.id === selected ? 1 : 0
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [vehicle.lng, vehicle.lat]
+        }
+      };
+    })
+  };
+}
+
+export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
+  let vehicles = [];
+  let selected = null;
+  let clickBound = false;
+
+  const ready = (async () => {
+    for (const [type, url] of Object.entries(ASSETS)) {
+      const id = iconId(type);
+      if (map.hasImage(id)) continue;
+      try {
+        const image = await loadImage(map, url);
+        if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 2 });
+      } catch (error) {
+        console.warn("Nako vehicle icon failed to load", type, error);
       }
     }
+
+    if (!map.getSource(SOURCE_ID)) {
+      map.addSource(SOURCE_ID, {
+        type: "geojson",
+        data: toFeatureCollection(vehicles, selected)
+      });
+    }
+
+    if (!map.getLayer(HALO_ID)) {
+      map.addLayer({
+        id: HALO_ID,
+        type: "circle",
+        source: SOURCE_ID,
+        filter: ["==", ["get", "selected"], 1],
+        paint: {
+          "circle-radius": 20,
+          "circle-color": "#4ea1ff",
+          "circle-opacity": 0.22,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#4ea1ff"
+        }
+      });
+    }
+
+    if (!map.getLayer(LAYER_ID)) {
+      map.addLayer({
+        id: LAYER_ID,
+        type: "symbol",
+        source: SOURCE_ID,
+        layout: {
+          "icon-image": ["get", "icon"],
+          "icon-size": [
+            "interpolate", ["linear"], ["zoom"],
+            11, 0.26,
+            14, 0.38,
+            16, 0.48,
+            18, 0.56
+          ],
+          "icon-anchor": "center",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-pitch-alignment": "viewport",
+          "icon-rotation-alignment": "viewport"
+        }
+      });
+    }
+
+    if (!clickBound) {
+      clickBound = true;
+      map.on("click", LAYER_ID, (event) => {
+        const id = event.features?.[0]?.properties?.id;
+        const vehicle = vehicles.find((item) => item.id === id);
+        if (vehicle) onSelect?.(vehicle);
+      });
+      map.on("mouseenter", LAYER_ID, () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", LAYER_ID, () => {
+        map.getCanvas().style.cursor = "";
+      });
+    }
+  })();
+
+  function sync() {
+    const source = map.getSource(SOURCE_ID);
+    if (source) source.setData(toFeatureCollection(vehicles, selected));
   }
 
   return {
-    setVehicles(next) {
+    async setVehicles(next) {
       vehicles = next || [];
+      await ready;
       sync();
     },
-    setSelected(id) {
+    async setSelected(id) {
       selected = id;
-      for (const [vid, entry] of markers) {
-        entry.el.classList.toggle("is-selected", vid === selected);
-      }
+      await ready;
+      sync();
     },
     clear() {
-      for (const [, entry] of markers) entry.marker.remove();
-      markers.clear();
       vehicles = [];
       selected = null;
+      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+      if (map.getLayer(HALO_ID)) map.removeLayer(HALO_ID);
+      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+      for (const type of Object.keys(ASSETS)) {
+        const id = iconId(type);
+        if (map.hasImage(id)) map.removeImage(id);
+      }
     }
   };
 }

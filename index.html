@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Nako">
-  <link rel="stylesheet" href="./assets/css/landing.css?v=8">
+  <link rel="stylesheet" href="./assets/css/landing.css?v=9">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="landing">
@@ -70,6 +70,140 @@
         </div>
         <div class="truth reveal">
           <p data-i18n="truth">Vehicles on the map show where drivers typically wait. Live trackers for drivers come later.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band demo-band" id="tour">
+      <div class="shell demo-shell">
+        <div class="demo-copy reveal">
+          <p class="band-kicker" data-i18n="demoKicker">See it in motion</p>
+          <h2 data-i18n="demoTitle">Watch how Nako works.</h2>
+          <p class="lead" data-i18n="demoLead">A short walkthrough of the phone app — pick a ride, set your place, then see what’s nearby on the map.</p>
+          <ol class="demo-steps" id="demo-steps" aria-label="App walkthrough steps">
+            <li class="is-active" data-step="0">
+              <strong data-i18n="demoStep1Title">1. Pick transport</strong>
+              <span data-i18n="demoStep1Body">Taxi, kombi, or bus — each card shows the real vehicle art.</span>
+            </li>
+            <li data-step="1">
+              <strong data-i18n="demoStep2Title">2. Choose your place</strong>
+              <span data-i18n="demoStep2Body">Town, suburb, or pin your spot so the search focuses near you.</span>
+            </li>
+            <li data-step="2">
+              <strong data-i18n="demoStep3Title">3. Find the corridor</strong>
+              <span data-i18n="demoStep3Body">Nako suggests a route. Keep it, or pick another from the list.</span>
+            </li>
+            <li data-step="3">
+              <strong data-i18n="demoStep4Title">4. See what’s nearby</strong>
+              <span data-i18n="demoStep4Body">The map shows taxis, kombis, or buses waiting along the corridor.</span>
+            </li>
+          </ol>
+          <div class="demo-controls">
+            <button type="button" class="demo-nav" id="demo-prev" aria-label="Previous slide">‹</button>
+            <div class="demo-dots" id="demo-dots" role="tablist" aria-label="Slides"></div>
+            <button type="button" class="demo-nav" id="demo-next" aria-label="Next slide">›</button>
+            <button type="button" class="demo-play" id="demo-play" aria-pressed="true" data-i18n="demoPause">Pause</button>
+          </div>
+        </div>
+
+        <div class="demo-stage reveal" aria-live="polite">
+          <div class="phone-frame">
+            <div class="phone-notch" aria-hidden="true"></div>
+            <div class="phone-screen" id="demo-screen">
+              <!-- Slide 0: pick transport -->
+              <article class="demo-slide is-active" data-slide="0">
+                <header class="demo-app-top">
+                  <span class="demo-brand">Nako</span>
+                  <span class="demo-lang">EN</span>
+                </header>
+                <h3 class="demo-app-title" data-i18n="appTitle">Where to?</h3>
+                <p class="demo-app-lede" data-i18n="demoSlide1Hint">Pick taxi, kombi, or bus</p>
+                <div class="demo-type-grid">
+                  <div class="demo-type is-on">
+                    <img src="./assets/vehicles/taxi-mark.png?v=4" alt="" width="88" height="58">
+                    <strong data-i18n="taxi">Taxi</strong>
+                  </div>
+                  <div class="demo-type">
+                    <img src="./assets/vehicles/kombi-mark.png?v=4" alt="" width="88" height="58">
+                    <strong data-i18n="kombi">Kombi</strong>
+                  </div>
+                  <div class="demo-type">
+                    <img src="./assets/vehicles/bus-mark.png?v=4" alt="" width="88" height="58">
+                    <strong data-i18n="bus">Bus</strong>
+                  </div>
+                </div>
+                <div class="demo-tap" aria-hidden="true"></div>
+              </article>
+
+              <!-- Slide 1: place -->
+              <article class="demo-slide" data-slide="1">
+                <header class="demo-app-top">
+                  <span class="demo-brand">Nako</span>
+                  <span class="demo-lang">EN</span>
+                </header>
+                <h3 class="demo-app-title" data-i18n="stepPlace">Town or place</h3>
+                <div class="demo-field">
+                  <span class="demo-pin">📍</span>
+                  <span class="demo-typed"><span data-i18n="demoCity">Gaborone</span><i class="demo-caret"></i></span>
+                </div>
+                <div class="demo-chips">
+                  <span class="is-on">Gaborone</span>
+                  <span>Francistown</span>
+                  <span>Maun</span>
+                </div>
+                <div class="demo-zones">
+                  <div class="demo-zone is-on"><strong data-i18n="allSuburbs">All areas</strong><span>Gaborone</span></div>
+                  <div class="demo-zone"><strong>Central / CBD</strong><span>Main Mall</span></div>
+                </div>
+                <button class="demo-cta" type="button" tabindex="-1" data-i18n="useLocation">Use my location</button>
+              </article>
+
+              <!-- Slide 2: route -->
+              <article class="demo-slide" data-slide="2">
+                <header class="demo-app-top">
+                  <span class="demo-brand">Nako</span>
+                  <span class="demo-lang">EN</span>
+                </header>
+                <h3 class="demo-app-title" data-i18n="stepRoute">Route</h3>
+                <div class="demo-recommend">
+                  <p data-i18n="demoRecommend">Broadhurst is closest — about 1.2 km away.</p>
+                  <span data-i18n="useRoute">Use this route</span>
+                </div>
+                <div class="demo-select" data-i18n="demoRouteName">Broadhurst &amp; Extension</div>
+                <button class="demo-cta demo-cta-main" type="button" tabindex="-1" data-i18n="findTransport">Find transport</button>
+                <div class="demo-pulse" aria-hidden="true"></div>
+              </article>
+
+              <!-- Slide 3: map -->
+              <article class="demo-slide demo-map-slide" data-slide="3">
+                <div class="demo-map">
+                  <div class="demo-roads" aria-hidden="true"></div>
+                  <div class="demo-route-line" aria-hidden="true"></div>
+                  <img class="demo-car c1" src="./assets/vehicles/taxi-mark.png?v=4" alt="">
+                  <img class="demo-car c2" src="./assets/vehicles/taxi-mark.png?v=4" alt="">
+                  <img class="demo-car c3" src="./assets/vehicles/taxi-mark.png?v=4" alt="">
+                  <div class="demo-map-bar">
+                    <span data-i18n="back">Back</span>
+                    <strong data-i18n="demoRouteName">Broadhurst &amp; Extension</strong>
+                  </div>
+                  <div class="demo-sheet-card">
+                    <div class="demo-sheet-handle"></div>
+                    <p class="demo-sheet-kicker" data-i18n="demoNearby">4 nearby</p>
+                    <strong data-i18n="demoRouteName">Broadhurst &amp; Extension</strong>
+                    <div class="demo-vehicle-row is-on">
+                      <span>Taxi · B 446 CHY</span>
+                      <em data-i18n="statusNearby">Nearby</em>
+                    </div>
+                    <div class="demo-vehicle-row">
+                      <span>Taxi · B 265 DDR</span>
+                      <em data-i18n="statusOnWay">On the way</em>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+          <p class="demo-caption" id="demo-caption" data-i18n="demoStep1Body">Taxi, kombi, or bus — each card shows the real vehicle art.</p>
         </div>
       </div>
     </section>

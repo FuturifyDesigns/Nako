@@ -1,7 +1,9 @@
+import { initDemo } from "./demo.js";
 import { applyLandingI18n, initLang, t, toggleLang } from "./i18n.js";
 
 initLang();
 applyLandingI18n();
+initDemo();
 
 const langBtn = document.querySelector("#lang-toggle");
 if (langBtn) {
@@ -10,6 +12,7 @@ if (langBtn) {
     toggleLang();
     applyLandingI18n();
     langBtn.textContent = t("otherLang");
+    document.dispatchEvent(new CustomEvent("nako-lang"));
   });
 }
 

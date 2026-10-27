@@ -74,9 +74,10 @@ function renderLogin(root, client) {
 }
 
 function brand() {
+  const mark = el("img", { class: "brand-mark", src: "../assets/icons/nako-mark.svg", alt: "", width: "40", height: "40" });
   return el("div", { class: "brand" }, [
+    mark,
     el("span", { class: "brand-name", text: "Nako" }),
-    el("span", { class: "brand-dot" }),
     el("span", { class: "brand-sub", text: "taxi rank network" })
   ]);
 }

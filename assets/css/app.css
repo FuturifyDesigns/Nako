@@ -44,10 +44,12 @@ img { max-width: 100%; }
 .site-footer { color: var(--muted); border-top: 1px solid var(--line); margin-top: 28px; padding-bottom: 36px; }
 .site-footer p { margin: 0; }
 
-.brand { display: flex; align-items: baseline; gap: 2px; text-decoration: none; color: inherit; }
-.brand-name { font-family: Outfit, Manrope, sans-serif; font-weight: 700; font-size: 34px; letter-spacing: -0.05em; }
-.brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); transform: translateY(-12px); }
-.brand-sub { margin-left: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.brand-mark { width: 40px; height: 40px; flex: 0 0 auto; }
+.brand-name { font-family: Outfit, Manrope, sans-serif; font-weight: 700; font-size: 28px; letter-spacing: -0.05em; position: relative; }
+.brand-name::after { content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--green); right: -11px; top: 4px; }
+.brand-dot { display: none; }
+.brand-sub { margin-left: 4px; color: #3f8fc8; font-size: 12px; font-weight: 800; }
 .quiet-link { color: var(--muted); font-weight: 700; text-decoration: none; }
 
 .hero { display: grid; gap: 28px; align-items: center; padding: 18px 0 10px; }

@@ -488,7 +488,8 @@ export async function mountPassenger(root) {
     });
 
     const mapCanvas = el("div", { class: "map-canvas" });
-    const sheet = el("section", { class: "sheet" });
+    const sheet = el("section", { class: "sheet is-open" });
+    const sheetBody = el("div", { class: "sheet-body" });
     const searchVeil = el("div", { class: "veil" }, [
       el("div", { class: "radar" }),
       el("p", { text: t("checkingRank") })
@@ -497,6 +498,48 @@ export async function mountPassenger(root) {
       el("span", { class: "pickup-kicker", text: t("pickup") }),
       el("strong", { class: "pickup-name", text: state.place.name })
     ]);
+    const mapTools = el("div", { class: "map-tools" }, [
+      el("button", { type: "button", class: "tool", "aria-label": t("location"), onclick: toggleGpsFromMap }, [icon("locate")]),
+      el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
+    ]);
+
+    let userCollapsed = false;
+    let sheetHideTimer = 0;
+    let mapMoving = false;
+
+    function setSheetHidden(hidden) {
+      sheet.classList.toggle("is-hidden", hidden);
+      sheet.classList.toggle("is-open", !hidden);
+      results.classList.toggle("sheet-collapsed", hidden);
+    }
+
+    function hideSheetForMapMove() {
+      mapMoving = true;
+      window.clearTimeout(sheetHideTimer);
+      setSheetHidden(true);
+    }
+
+    function showSheetAfterMapIdle() {
+      mapMoving = false;
+      window.clearTimeout(sheetHideTimer);
+      sheetHideTimer = window.setTimeout(() => {
+        if (!mapMoving && !userCollapsed) setSheetHidden(false);
+      }, 420);
+    }
+
+    const sheetHandle = el("button", {
+      type: "button",
+      class: "sheet-handle",
+      "aria-label": "Toggle details",
+      onclick: () => {
+        userCollapsed = !sheet.classList.contains("is-hidden") ? true : false;
+        // If currently open → user wants it closed. If hidden → user wants it open.
+        const hide = !sheet.classList.contains("is-hidden");
+        userCollapsed = hide;
+        setSheetHidden(hide);
+      }
+    });
+    sheet.append(sheetHandle, sheetBody);
 
     results.append(
       mapCanvas,
@@ -507,10 +550,7 @@ export async function mountPassenger(root) {
           el("span", { text: `${state.place.name} · ${labelFor(state.transport)}` })
         ])
       ]),
-      el("div", { class: "map-tools" }, [
-        el("button", { type: "button", class: "tool", "aria-label": t("location"), onclick: toggleGpsFromMap }, [icon("locate")]),
-        el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
-      ]),
+      mapTools,
       pickupLabel,
       searchVeil,
       sheet
@@ -520,7 +560,7 @@ export async function mountPassenger(root) {
     results.append(pin);
 
     function fillSheet(current) {
-      clear(sheet);
+      clear(sheetBody);
       const best = working[0];
       const offer = best && current && best.route.id !== current.id;
       const banner = offer ? el("div", { class: "recommend in-sheet" }, [
@@ -529,7 +569,6 @@ export async function mountPassenger(root) {
         el("button", { type: "button", class: "text-button muted", onclick: () => { banner.remove(); track("recommendation_skip", { city: state.place.name, transport: state.transport, routeId: current.id }); } }, [t("keepChoice")])
       ]) : null;
       const pieces = [
-        el("div", { class: "sheet-handle" }),
         el("p", {
           class: "sheet-kicker",
           text: state.fleet.length ? t("vehiclesNearby", { count: String(state.fleet.length) }) : t("noVehicles")
@@ -556,7 +595,7 @@ export async function mountPassenger(root) {
           }
         }, working.map((item) => el("option", { value: item.route.id, selected: item.route.id === current?.id ? "selected" : null, text: item.route.name }))));
       }
-      sheet.append(...pieces.filter(Boolean));
+      sheetBody.append(...pieces.filter(Boolean));
     }
 
     function selectVehicle(vehicle) {
@@ -581,7 +620,7 @@ export async function mountPassenger(root) {
         distanceTo: distanceNow,
         type: state.transport
       });
-      drawRoute(route, rankedNow.map((item) => item.route));
+      drawRoute(route);
       layer?.setVehicles(state.fleet);
       layer?.setSelected(state.selectedVehicle);
       fillSheet(route);
@@ -589,16 +628,27 @@ export async function mountPassenger(root) {
       updatePickup();
     }
 
-    function drawRoute(route, all) {
+    function simplifyPath(path, maxPoints = 48) {
+      if (!path?.length) return [];
+      if (path.length <= maxPoints) return path.map((spot) => [spot.lng, spot.lat]);
+      const step = (path.length - 1) / (maxPoints - 1);
+      const coords = [];
+      for (let i = 0; i < maxPoints; i += 1) {
+        const spot = path[Math.round(i * step)];
+        coords.push([spot.lng, spot.lat]);
+      }
+      return coords;
+    }
+
+    function drawRoute(route) {
       if (!map?.getSource("corridors")) return;
-      map.getSource("corridors").setData({
-        type: "FeatureCollection",
-        features: (all || []).filter((item) => item?.path?.length).map((item) => ({
-          type: "Feature",
-          properties: { chosen: item.id === route?.id ? 1 : 0 },
-          geometry: { type: "LineString", coordinates: item.path.map((spot) => [spot.lng, spot.lat]) }
-        }))
-      });
+      // One tidy corridor only — extra overlapping routes looked scattered.
+      const features = route?.path?.length ? [{
+        type: "Feature",
+        properties: { chosen: 1 },
+        geometry: { type: "LineString", coordinates: simplifyPath(route.path) }
+      }] : [];
+      map.getSource("corridors").setData({ type: "FeatureCollection", features });
     }
 
     function focusMap(route) {
@@ -695,9 +745,9 @@ export async function mountPassenger(root) {
           "line-join": "round"
         },
         paint: {
-          "line-color": ["case", ["==", ["get", "chosen"], 1], "#ffffff", "#ffffff"],
-          "line-width": ["case", ["==", ["get", "chosen"], 1], 12, 8],
-          "line-opacity": 0.9
+          "line-color": "#ffffff",
+          "line-width": 10,
+          "line-opacity": 0.95
         }
       });
       map.addLayer({
@@ -709,18 +759,26 @@ export async function mountPassenger(root) {
           "line-join": "round"
         },
         paint: {
-          "line-color": ["case", ["==", ["get", "chosen"], 1], "#1f6feb", "#94a3b8"],
-          "line-width": ["case", ["==", ["get", "chosen"], 1], 5, 3],
-          "line-opacity": 0.95
+          "line-color": "#1f6feb",
+          "line-width": 4.5,
+          "line-opacity": 1
         }
       });
       layer = createVehicleLayer(map, maplibregl, {
         onSelect: (vehicle) => selectVehicle(vehicle)
       });
-      drawRoute(active, working.map((item) => item.route));
+      drawRoute(active);
       layer.setVehicles(state.fleet);
       layer.setSelected(state.selectedVehicle);
       focusMap(active || { path: [point || focusPoint()] });
+
+      map.on("movestart", hideSheetForMapMove);
+      map.on("zoomstart", hideSheetForMapMove);
+      map.on("dragstart", hideSheetForMapMove);
+      map.on("moveend", showSheetAfterMapIdle);
+      map.on("zoomend", showSheetAfterMapIdle);
+      map.on("dragend", showSheetAfterMapIdle);
+
       const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 200 : 900;
       window.setTimeout(() => {
         state.searching = false;

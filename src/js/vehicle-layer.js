@@ -5,9 +5,9 @@ const ASSETS = {
 };
 
 const SIZES = {
-  taxi: 42,
-  kombi: 48,
-  bus: 56
+  taxi: 40,
+  kombi: 46,
+  bus: 52
 };
 
 function assetFor(type) {
@@ -33,7 +33,7 @@ function makeEl(vehicle, selected) {
   wrap.setAttribute("aria-label", `${type} ${vehicle.plate || ""}`.trim());
   wrap.style.width = `${width}px`;
   const img = document.createElement("img");
-  img.src = `${assetFor(type)}?v=2`;
+  img.src = `${assetFor(type)}?v=3`;
   img.alt = "";
   img.draggable = false;
   img.width = width;
@@ -49,7 +49,7 @@ export function createVehicleLayer(map, maplibregl, { onSelect } = {}) {
 
   function sync() {
     const seen = new Set();
-    vehicles.forEach((vehicle, index) => {
+    vehicles.forEach((vehicle) => {
       const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
       seen.add(vehicle.id);
       let entry = markers.get(vehicle.id);
@@ -60,16 +60,15 @@ export function createVehicleLayer(map, maplibregl, { onSelect } = {}) {
           event.stopPropagation();
           onSelect?.(vehicle);
         });
-        // Fan nearby markers slightly so overlapping ranks stay readable
-        const fan = ((index % 5) - 2) * 0.000045;
+        // Anchor dead-center on geo coords so zoom never drifts the marker.
         const marker = new maplibregl.Marker({
           element: el,
           anchor: "center",
-          offset: [fan * 120000, ((index % 3) - 1) * 4],
-          pitchAlignment: "viewport",
-          rotationAlignment: "viewport"
+          offset: [0, 0],
+          pitchAlignment: "map",
+          rotationAlignment: "map"
         })
-          .setLngLat([vehicle.lng + fan, vehicle.lat + fan * 0.6])
+          .setLngLat([vehicle.lng, vehicle.lat])
           .addTo(map);
         entry = { marker, el, type };
         markers.set(vehicle.id, entry);

@@ -27,9 +27,10 @@ function statusFor(distance) {
   return "at_rank";
 }
 
-function pushVehicle(list, route, fraction, side, type, point) {
+function pushVehicle(list, route, fraction, sideMeters, type, point) {
   const spot = pointAlong(route.path, fraction) || route.path[0];
-  const shifted = offsetPoint(spot, spot.bearing + 90, side);
+  // Keep a small, even roadside offset so markers stay tidy along one corridor.
+  const shifted = offsetPoint(spot, spot.bearing + 90, sideMeters);
   const id = `${route.id}-${type}-${list.length}`;
   const distance = point ? haversine(point, shifted) : null;
   list.push({
@@ -42,7 +43,7 @@ function pushVehicle(list, route, fraction, side, type, point) {
     lng: shifted.lng,
     bearing: spot.bearing,
     baseFraction: fraction,
-    side,
+    side: sideMeters,
     distance,
     state: statusFor(distance)
   });
@@ -51,30 +52,21 @@ function pushVehicle(list, route, fraction, side, type, point) {
 export function simulateFleet({ routes, point, distanceTo, type }) {
   const fleet = [];
   const primary = routes[0];
-  const secondary = routes[1];
   const transport = type === "taxi" || type === "bus" ? type : "kombi";
-  if (!primary) return fleet;
+  if (!primary?.path?.length) return fleet;
 
-  if (transport === "bus" || (distanceTo ?? 0) > 8000) {
-    pushVehicle(fleet, primary, 0.04, 14, transport, point);
-    pushVehicle(fleet, primary, 0.08, -16, transport, point);
-    if (secondary) pushVehicle(fleet, secondary, 0.05, 12, transport, point);
-    if (transport !== "bus") {
-      pushVehicle(fleet, primary, 0.18, 18, transport, point);
-      pushVehicle(fleet, primary, 0.28, -14, transport, point);
-    }
-    return fleet;
-  }
+  // Only place vehicles on the active corridor for a clean, uniform look.
+  const count = transport === "bus" ? 3 : transport === "taxi" ? 4 : 5;
+  const spread = transport === "bus" || (distanceTo ?? 0) > 8000 ? 0.12 : 0.08;
+  const start = transport === "bus" || (distanceTo ?? 0) > 8000
+    ? 0.06
+    : Math.min(0.7, Math.max(0.08, nearestFraction(primary, point) - spread));
 
-  const nearest = nearestFraction(primary, point);
-  const count = transport === "taxi" ? 4 : 5;
   for (let i = 0; i < count; i += 1) {
-    const fraction = Math.min(0.92, Math.max(0.05, nearest + (i - 1) * 0.07));
-    pushVehicle(fleet, primary, fraction, i % 2 === 0 ? 16 : -16, transport, point);
-  }
-  if (secondary) {
-    pushVehicle(fleet, secondary, 0.2, 14, transport, point);
-    pushVehicle(fleet, secondary, 0.45, -18, transport, point);
+    const fraction = Math.min(0.9, start + i * spread);
+    // Alternate a tiny left/right offset (meters) so they don't stack.
+    const side = i % 2 === 0 ? 8 : -8;
+    pushVehicle(fleet, primary, fraction, side, transport, point);
   }
   return fleet;
 }

@@ -1,4 +1,4 @@
-const CACHE = "nako-shell-2026-10-27-2";
+const CACHE = "nako-shell-2026-10-27-3";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -24,6 +24,8 @@ const PRECACHE = [
   "./vendor/maplibre-gl.css",
   "./vendor/three.module.js",
   "./vendor/supabase.js",
+  "./vendor/gsap.min.js",
+  "./vendor/ScrollTrigger.min.js",
   "./data/catalog.js",
   "./src/js/mode.js",
   "./src/js/home.js",

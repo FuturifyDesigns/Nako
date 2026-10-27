@@ -15,28 +15,26 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="landing">
-  <div class="flag-bar" aria-hidden="true"></div>
+  <div class="flag-bar" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
   <main>
     <section class="hero">
-      <div class="hero-stage" aria-hidden="true"></div>
       <header class="shell topbar">
         <a class="brand-lockup" href="./">
-          <img src="./assets/icons/nako-logo.png" width="64" height="64" alt="">
+          <img src="./assets/icons/nako-logo.png" width="52" height="52" alt="">
           <span class="brand-copy">
             <strong>Nako</strong>
             <span>taxi rank network</span>
           </span>
         </a>
-        <a class="topbar-link" href="./admin/">Association desk</a>
       </header>
       <div class="shell hero-body">
         <div class="hero-layout">
-          <img class="hero-mark reveal" src="./assets/icons/nako-logo.png" width="360" height="360" alt="Nako logo: clock, taxi, and kombi on the road">
+          <img class="hero-mark reveal" src="./assets/icons/nako-logo.png" width="280" height="280" alt="Nako logo: clock, taxi, and kombi on the road">
           <div class="hero-copy">
-            <p class="eyebrow reveal reveal-delay-1">Not ride-hailing</p>
-            <h1 class="reveal reveal-delay-1">Know what’s <em>coming</em>.</h1>
-            <p class="reveal reveal-delay-2">Botswana’s ranks, on your phone. Spot a corridor near you, then catch a taxi, kombi, or coach the way people already do.</p>
-            <div class="cta-row reveal reveal-delay-3">
+            <p class="eyebrow reveal">Not ride-hailing</p>
+            <h1 class="reveal">Know what’s <em>coming</em>.</h1>
+            <p class="reveal">Botswana’s ranks, on your phone. Spot a corridor near you, then catch a taxi, kombi, or coach the way people already do.</p>
+            <div class="cta-row reveal">
               <button class="cta" id="install-button" type="button">Download the app</button>
               <a class="ghost-link" href="#how">How it works today</a>
             </div>
@@ -49,17 +47,20 @@
       <div class="shell">
         <p class="band-kicker reveal">Phase one</p>
         <h2 class="reveal">Open the app. Pick a ride. Stand at the right rank.</h2>
-        <p class="lead reveal reveal-delay-1">This site tells the story. The search itself lives in the installed app, so it still works when the signal drops.</p>
+        <p class="lead reveal">This site tells the story. The search itself lives in the installed app, so it still works when the signal drops.</p>
         <div class="promise-grid">
           <article class="promise reveal">
+            <div class="icon-chip" aria-hidden="true">1</div>
             <strong>Taxi, kombi, or coach</strong>
             <p>Start with the ride you want. In Gaborone you can narrow it to CBD, Broadhurst, Mogoditshane, Game City, and the rest.</p>
           </article>
-          <article class="promise reveal reveal-delay-1">
+          <article class="promise reveal">
+            <div class="icon-chip" aria-hidden="true">2</div>
             <strong>Your spot on the map</strong>
             <p>Turn location on, pin the street, or type a place people actually say out loud: Riverwalk, Block 8, Station.</p>
           </article>
-          <article class="promise reveal reveal-delay-2">
+          <article class="promise reveal">
+            <div class="icon-chip" aria-hidden="true">3</div>
             <strong>A route, not a lecture</strong>
             <p>Nako points to a nearby corridor. Keep it, or ignore it and choose another. You’re still the one boarding.</p>
           </article>
@@ -74,17 +75,17 @@
       <div class="shell">
         <p class="band-kicker reveal">The network</p>
         <h2 class="reveal">Built for ranks. Growing with the association.</h2>
-        <p class="lead reveal reveal-delay-1">Nine pieces of the full Nako network. Hover a card to see where each one sits.</p>
+        <p class="lead reveal">Nine pieces of the full Nako network. Hover a card to see where each one sits.</p>
         <div class="roadmap-grid">
           <article class="road-card reveal"><span class="n">1</span><h3>Auth + roles</h3><p>Passenger, driver, fleet owner, and association each get their own door.</p></article>
-          <article class="road-card reveal reveal-delay-1"><span class="n">2</span><h3>Drivers + vehicles</h3><p>Register drivers and keep vehicle details where the rank can see them.</p></article>
-          <article class="road-card reveal reveal-delay-2"><span class="n">3</span><h3>Taxi ranks</h3><p>Digitise the ranks so people know what is waiting before they walk over.</p></article>
+          <article class="road-card reveal"><span class="n">2</span><h3>Drivers + vehicles</h3><p>Register drivers and keep vehicle details where the rank can see them.</p></article>
+          <article class="road-card reveal"><span class="n">3</span><h3>Taxi ranks</h3><p>Digitise the ranks so people know what is waiting before they walk over.</p></article>
           <article class="road-card reveal"><span class="n">4</span><h3>Online GPS</h3><p>Live vehicle location and status once the trackers are fitted.</p></article>
-          <article class="road-card reveal reveal-delay-1"><span class="n">5</span><h3>Rank check-in</h3><p>Drivers check in and out at the rank with QR or location.</p></article>
-          <article class="road-card reveal reveal-delay-2"><span class="n">6</span><h3>Passenger discovery</h3><p>Find nearby ranks and available taxis without calling around.</p></article>
+          <article class="road-card reveal"><span class="n">5</span><h3>Rank check-in</h3><p>Drivers check in and out at the rank with QR or location.</p></article>
+          <article class="road-card reveal"><span class="n">6</span><h3>Passenger discovery</h3><p>Find nearby ranks and available taxis without calling around.</p></article>
           <article class="road-card reveal"><span class="n">7</span><h3>QR verification</h3><p>Scan a vehicle and confirm it belongs on the platform.</p></article>
-          <article class="road-card reveal reveal-delay-1"><span class="n">8</span><h3>Owner dashboard</h3><p>Fleet owners watch performance without standing at the rank all day.</p></article>
-          <article class="road-card reveal reveal-delay-2"><span class="n">9</span><h3>Association desk</h3><p>Monitor ranks, drivers, routes, and compliance from one place.</p></article>
+          <article class="road-card reveal"><span class="n">8</span><h3>Owner dashboard</h3><p>Fleet owners watch performance without standing at the rank all day.</p></article>
+          <article class="road-card reveal"><span class="n">9</span><h3>Association tools</h3><p>Monitor ranks, drivers, routes, and compliance from one place.</p></article>
         </div>
       </div>
     </section>
@@ -93,7 +94,7 @@
       <div class="shell">
         <p class="band-kicker reveal">Get Nako</p>
         <h2 class="reveal">Put the finder on your home screen.</h2>
-        <p class="lead reveal reveal-delay-1">One install. Then the route list, the map, and the simulated vehicles open from the icon.</p>
+        <p class="lead reveal">One install. Then the route list, the map, and the simulated vehicles open from the icon.</p>
         <div class="install-panel">
           <div class="install-steps reveal">
             <ol>
@@ -120,7 +121,7 @@
               </li>
             </ol>
           </div>
-          <aside class="install-note reveal reveal-delay-1">
+          <aside class="install-note reveal">
             <h3>Why install?</h3>
             <p>Browsing this page is fine for reading. Searching Gaborone corridors, pinning your street, and watching the map needs the installed app.</p>
           </aside>
@@ -135,6 +136,8 @@
   </footer>
 
   <script src="./vendor/supabase.js"></script>
+  <script src="./vendor/gsap.min.js"></script>
+  <script src="./vendor/ScrollTrigger.min.js"></script>
   <script type="module" src="./src/js/home.js"></script>
   <script type="module" src="./src/js/landing.js"></script>
 </body>

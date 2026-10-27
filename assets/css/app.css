@@ -220,11 +220,14 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
   margin-top: 8px;
 }
 .find:hover { background: var(--blue-dark); }
+.find .ico { color: #fff; }
+.find .ico svg { stroke: #fff; }
 .recommend { background: #f4f8ff; border-radius: 16px; padding: 12px; margin: 8px 0; color: var(--ink); }
 .recommend p { margin: 0 0 8px; }
 .text-button { border: 0; background: transparent; color: var(--blue); font-weight: 800; padding: 0; }
 .text-button.muted { color: var(--muted); }
 .finder-card .ico svg { stroke: var(--muted); }
+.finder-card .find .ico svg { stroke: #fff; }
 .ico svg { width: 22px; height: 22px; display: block; }
 .form-error { color: #9f1239; font-weight: 700; }
 
@@ -253,7 +256,7 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
 .map-bar div { display: grid; min-width: 0; }
 .map-bar span { color: var(--muted); font-size: 12px; }
 .map-bar strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
-.map-tools { top: auto; bottom: calc(min(48vh, 460px) + 28px); right: 14px; display: grid; gap: 10px; z-index: 3; }
+.map-tools { top: auto; bottom: calc(min(62vh, 560px) + 24px); right: 14px; display: grid; gap: 10px; z-index: 3; }
 .tool {
   width: 46px;
   height: 46px;
@@ -319,13 +322,13 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
 @keyframes pulse { from { transform: scale(0.7); opacity: 0.8; } to { transform: scale(1.25); opacity: 0.2; } }
 .sheet {
   left: 10px; right: 10px; bottom: 10px;
-  max-height: min(48vh, 460px);
+  max-height: min(62vh, 560px);
   overflow: hidden;
   background: #fff;
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 28px 28px 22px 22px;
-  padding: 8px 14px 16px;
+  padding: 8px 14px 18px;
   box-shadow: var(--shadow);
   transform: translateY(0);
   opacity: 1;
@@ -340,9 +343,29 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
   pointer-events: none;
 }
 .sheet-body {
-  max-height: calc(min(48vh, 460px) - 36px);
+  max-height: calc(min(62vh, 560px) - 40px);
   overflow: auto;
-  padding-bottom: 4px;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.sheet-route-switch {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f4f8ff;
+  border: 1px solid #d7e6f7;
+}
+.sheet-route-switch select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  padding: 10px 12px;
 }
 .sheet-handle {
   appearance: none;

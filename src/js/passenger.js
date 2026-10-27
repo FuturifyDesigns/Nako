@@ -115,7 +115,7 @@ export async function mountPassenger(root) {
     placeInput.placeholder = t("placePlaceholder");
     useLocBtn.replaceChildren(icon("locate"), document.createTextNode(t("useLocation")));
     pinBtn.replaceChildren(icon("pin"), document.createTextNode(t("pinMap")));
-    findBtn.replaceChildren(icon("plane"), document.createTextNode(t("findTransport")));
+    findBtn.replaceChildren(document.createTextNode(t("findTransport")), icon("arrow"));
     clear(typeGrid);
     const art = {
       taxi: "../assets/vehicles/taxi-mark.png?v=4",
@@ -216,6 +216,67 @@ export async function mountPassenger(root) {
     }
     suggestionBox.hidden = true;
     updateLocation();
+  }
+
+  function placesGeoJSON() {
+    if (!state.place) return { type: "FeatureCollection", features: [] };
+    const seen = new Set();
+    const features = [];
+    const push = (name, lat, lng, kind) => {
+      if (lat == null || lng == null || !name) return;
+      const key = `${name.toLowerCase()}|${lat.toFixed(4)}|${lng.toFixed(4)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      features.push({
+        type: "Feature",
+        properties: { name, kind },
+        geometry: { type: "Point", coordinates: [lng, lat] }
+      });
+    };
+    push(state.place.name, state.place.lat, state.place.lng, "town");
+    for (const zone of state.place.zones || []) {
+      push(zone.name, zone.lat, zone.lng, "zone");
+    }
+    for (const alias of state.catalog.aliases || []) {
+      if (alias.placeId !== state.place.id) continue;
+      push(alias.label || alias.q, alias.lat, alias.lng, "place");
+    }
+    for (const route of state.place.routes || []) {
+      const tip = route.path?.[0];
+      if (tip) push(route.origin_name || route.name, tip.lat, tip.lng, "stop");
+      const end = route.path?.[route.path.length - 1];
+      if (end) push(route.destination_name, end.lat, end.lng, "stop");
+    }
+    return { type: "FeatureCollection", features };
+  }
+
+  function bumpPlaceLabels(mapInstance) {
+    if (!mapInstance?.getStyle) return;
+    const style = mapInstance.getStyle();
+    for (const layerDef of style.layers || []) {
+      if (layerDef.type !== "symbol") continue;
+      const id = layerDef.id || "";
+      const field = layerDef.layout?.["text-field"];
+      const looksLikePlace =
+        /place|settlement|suburb|neighbour|neighborhood|locality|label/i.test(id) ||
+        (typeof field === "string" && /name/i.test(field)) ||
+        (Array.isArray(field) && JSON.stringify(field).includes("name"));
+      if (!looksLikePlace) continue;
+      try {
+        if (mapInstance.getLayoutProperty(id, "text-size") != null) {
+          mapInstance.setLayoutProperty(id, "text-size", [
+            "interpolate", ["linear"], ["zoom"],
+            10, 11,
+            14, 14,
+            16, 16
+          ]);
+        }
+        mapInstance.setPaintProperty(id, "text-halo-width", 1.35);
+        mapInstance.setPaintProperty(id, "text-halo-color", "#ffffff");
+      } catch {
+        /* style layer may not expose every property */
+      }
+    }
   }
 
   function choosePlace(place, label, zoneId = "all", silent = false) {
@@ -608,14 +669,20 @@ export async function mountPassenger(root) {
         }))
       ];
       if (working.length > 1) {
-        pieces.push(el("label", { class: "sheet-switch", text: t("otherRoute") }));
-        pieces.push(el("select", {
-          "aria-label": t("otherRoute"),
-          onchange: (event) => {
-            const next = working.find((item) => item.route.id === event.target.value)?.route;
-            if (next) switchRoute(next);
-          }
-        }, working.map((item) => el("option", { value: item.route.id, selected: item.route.id === current?.id ? "selected" : null, text: item.route.name }))));
+        pieces.splice(3, 0, el("div", { class: "sheet-route-switch" }, [
+          el("label", { class: "sheet-switch", text: t("otherRoute") }),
+          el("select", {
+            "aria-label": t("otherRoute"),
+            onchange: (event) => {
+              const next = working.find((item) => item.route.id === event.target.value)?.route;
+              if (next) switchRoute(next);
+            }
+          }, working.map((item) => el("option", {
+            value: item.route.id,
+            selected: item.route.id === current?.id ? "selected" : null,
+            text: item.route.name
+          })))
+        ]));
       }
       sheetBody.append(...pieces.filter(Boolean));
     }
@@ -747,9 +814,9 @@ export async function mountPassenger(root) {
 
     map = new maplibregl.Map({
       container: mapCanvas,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
-      zoom: 14.4,
+      zoom: 13.6,
       pitch: 0,
       bearing: 0,
       maxPitch: 0,
@@ -763,6 +830,7 @@ export async function mountPassenger(root) {
     map.touchZoomRotate.disableRotation();
     map.on("load", () => {
       map.resize();
+      bumpPlaceLabels(map);
       map.addSource("corridors", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] }
@@ -793,6 +861,40 @@ export async function mountPassenger(root) {
           "line-color": "#1f6feb",
           "line-width": 4,
           "line-opacity": 1
+        }
+      });
+      map.addSource("nako-places", {
+        type: "geojson",
+        data: placesGeoJSON()
+      });
+      map.addLayer({
+        id: "nako-places-dot",
+        type: "circle",
+        source: "nako-places",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3, 15, 5.5],
+          "circle-color": "#1f6feb",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff"
+        }
+      });
+      map.addLayer({
+        id: "nako-places-label",
+        type: "symbol",
+        source: "nako-places",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 15, 13],
+          "text-offset": [0, 1.05],
+          "text-anchor": "top",
+          "text-optional": true,
+          "text-padding": 2
+        },
+        paint: {
+          "text-color": "#122033",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.4
         }
       });
       layer = createVehicleLayer(map, maplibregl, {

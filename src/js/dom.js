@@ -26,6 +26,7 @@ export function icon(name) {
     kombi: '<path d="M4 16V9.5A2.5 2.5 0 0 1 6.5 7h11A2.5 2.5 0 0 1 20 9.5V16"/><path d="M4 13h16"/><path d="M7 16v2M17 16v2"/><circle cx="7.5" cy="18" r="1.3"/><circle cx="16.5" cy="18" r="1.3"/>',
     bus: '<rect x="3" y="6" width="18" height="10" rx="2"/><path d="M3 12h18M7 16v2M17 16v2"/><circle cx="7.5" cy="18" r="1.3"/><circle cx="16.5" cy="18" r="1.3"/>',
     plane: '<path d="M3 12l18-7-7 18-2.2-6.6L3 12z"/>',
+    arrow: '<path d="M5 12h12"/><path d="M13 6l6 6-6 6"/>',
     locate: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/>',
     close: '<path d="M7 7l10 10M17 7L7 17"/>'
   };

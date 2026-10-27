@@ -782,10 +782,11 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   gap: 8px;
 }
 .demo-type {
+  position: relative;
   background: #1c2129;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 16px;
-  padding: 10px 6px;
+  padding: 12px 6px 10px;
   text-align: center;
   display: grid;
   gap: 6px;
@@ -803,18 +804,29 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 .demo-tap {
   position: absolute;
+  left: 50%;
+  top: 42%;
   width: 28px;
   height: 28px;
+  margin: -14px 0 0 -14px;
   border-radius: 50%;
-  background: rgba(78,161,255,0.35);
+  background: rgba(78,161,255,0.4);
   border: 2px solid #8ec2ff;
-  left: 18%;
-  top: 58%;
   opacity: 0;
+  pointer-events: none;
+  z-index: 2;
 }
 .demo-slide[data-slide="0"].run .demo-tap {
   animation: demoTap 1.6s ease 0.2s both;
 }
+.demo-tap-row {
+  top: 50%;
+  left: 72%;
+}
+.demo-slide[data-slide="3"].run .demo-tap-row {
+  animation: demoTap 1.4s ease 0.85s both;
+}
+.demo-vehicle-row { position: relative; }
 
 .demo-field {
   display: flex;
@@ -927,14 +939,14 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 .demo-route-line {
   position: absolute;
-  left: 18%;
-  top: 22%;
-  width: 64%;
-  height: 4px;
+  left: 16%;
+  top: 30%;
+  width: 68%;
+  height: 5px;
   border-radius: 999px;
   background: #1f6feb;
   box-shadow: 0 0 0 4px rgba(255,255,255,0.9);
-  transform: rotate(28deg);
+  transform: rotate(24deg);
   transform-origin: left center;
 }
 .demo-slide[data-slide="3"].run .demo-route-line {
@@ -942,13 +954,15 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 .demo-car {
   position: absolute;
-  width: 54px;
+  width: 52px;
   height: auto;
   filter: drop-shadow(0 4px 8px rgba(18,32,51,0.25));
+  z-index: 2;
 }
-.demo-car.c1 { left: 28%; top: 34%; }
-.demo-car.c2 { left: 46%; top: 42%; }
-.demo-car.c3 { left: 58%; top: 52%; }
+/* Sit vehicles on the corridor (line from ~16%/30% at 24°) */
+.demo-car.c1 { left: 24%; top: 28%; }
+.demo-car.c2 { left: 42%; top: 36%; }
+.demo-car.c3 { left: 58%; top: 43%; }
 .demo-slide[data-slide="3"].run .demo-car.c1 { animation: demoPop 0.55s ease 0.35s both; }
 .demo-slide[data-slide="3"].run .demo-car.c2 { animation: demoPop 0.55s ease 0.5s both; }
 .demo-slide[data-slide="3"].run .demo-car.c3 { animation: demoPop 0.55s ease 0.65s both; }
@@ -999,6 +1013,7 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 .demo-vehicle-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   background: #1c2129;
   border: 1px solid rgba(255,255,255,0.1);
@@ -1093,18 +1108,21 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 .process-stage {
   position: relative;
-  height: 148px;
+  height: 168px;
   border-radius: 16px;
   overflow: hidden;
   background: #0f141b;
 }
 .process-phone {
   position: absolute;
-  inset: 14px 22px 10px;
+  inset: 10px 14px 12px;
   border-radius: 18px;
   background: #161c24;
   border: 1px solid rgba(255,255,255,0.08);
-  padding: 12px;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .process-phone.thin { inset: 18px 36px 14px; }
 .process-bar {
@@ -1121,33 +1139,40 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 .process-tiles {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 8px;
+  align-items: stretch;
 }
 .ptile {
+  position: relative;
   display: grid;
   place-items: center;
-  gap: 4px;
-  padding: 8px 4px;
-  border-radius: 12px;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px 6px;
+  border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.08);
   background: #1c2430;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
-.ptile img { width: 44px; height: 28px; object-fit: contain; }
-.ptile em { font-style: normal; }
+.ptile img { width: 52px; height: 34px; object-fit: contain; }
+.ptile em { font-style: normal; line-height: 1; }
 .ptile.is-lit { border-color: #4ea1ff; background: #243041; }
 .process-card.run .ptile.is-lit { animation: demoSelect 0.7s ease 0.2s both; }
 .process-finger {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  left: 50%;
+  top: 40%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
   border-radius: 50%;
   background: rgba(78,161,255,0.55);
-  left: 22%;
-  top: 58%;
+  border: 2px solid #8ec2ff;
   opacity: 0;
+  pointer-events: none;
+  z-index: 2;
 }
 .process-card.run .process-finger { animation: demoTap 1.1s ease 0.35s both; }
 
@@ -1189,36 +1214,47 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 .process-card.run .process-radar { animation: demoRadar 1.2s ease 0.45s both; }
 
 .stage-match {
-  background: radial-gradient(circle at 30% 70%, rgba(78,161,255,0.25), transparent 45%), #121820;
+  background:
+    radial-gradient(circle at 72% 28%, rgba(78,161,255,0.22), transparent 40%),
+    radial-gradient(circle at 22% 72%, rgba(47,111,237,0.2), transparent 42%),
+    #121820;
 }
 .process-you, .process-rank {
   position: absolute;
   z-index: 2;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
   color: #fff;
 }
-.process-you { left: 14%; bottom: 22%; background: #2f6fed; }
-.process-rank { right: 12%; top: 22%; background: #1f6fa8; }
-.process-match-line {
+.process-you { left: 10%; bottom: 18%; background: #2f6fed; }
+.process-rank { right: 10%; top: 16%; background: #1f6fa8; }
+.process-match-track {
   position: absolute;
   left: 22%;
-  top: 38%;
+  top: 58%;
   width: 58%;
-  height: 3px;
+  height: 4px;
+  transform: rotate(-32deg);
+  transform-origin: left center;
+}
+.process-match-line {
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, #4ea1ff, #75aadb);
   transform-origin: left center;
   transform: scaleX(0);
+  box-shadow: 0 0 0 2px rgba(78,161,255,0.18);
 }
 .process-spark {
   position: absolute;
-  right: 18%;
-  top: 28%;
+  right: -4px;
+  top: 50%;
   width: 10px;
   height: 10px;
+  margin-top: -5px;
   border-radius: 50%;
   background: #fff;
   opacity: 0;
@@ -1228,29 +1264,65 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 
 .stage-board {
   background:
-    linear-gradient(180deg, #cfe0ef 0%, #b7cfe3 55%, #9ebdd6 100%);
+    linear-gradient(180deg, #d7e7f4 0%, #b9d0e4 52%, #9ebdd6 100%);
 }
-.process-walk {
+.process-path {
   position: absolute;
-  left: 16%;
-  bottom: 28%;
-  display: flex;
-  gap: 8px;
+  left: 14%;
+  right: 34%;
+  bottom: 40%;
+  height: 3px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(31,111,168,0.55) 0 8px,
+    transparent 8px 14px
+  );
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0.9;
 }
-.process-dot {
-  width: 10px;
-  height: 10px;
+.process-walker {
+  position: absolute;
+  left: 12%;
+  bottom: 36%;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: #1f6fa8;
-  opacity: 0.25;
+  background: #0b1c2c;
+  box-shadow: 0 0 0 3px rgba(47,111,237,0.35);
+  opacity: 0;
+  z-index: 3;
+}
+.process-stand {
+  position: absolute;
+  right: 8%;
+  bottom: 28%;
+  width: 100px;
+  height: 70px;
 }
 .process-waiting {
   position: absolute;
-  right: 12%;
-  bottom: 22%;
+  left: 50%;
+  bottom: 0;
+  width: 92px;
+  height: auto;
+  margin-left: -46px;
   filter: drop-shadow(0 8px 12px rgba(11,28,44,0.25));
-  transform: translateX(12px);
-  opacity: 0.5;
+  opacity: 0;
+  transform: translateX(16px) scale(0.92);
+  z-index: 2;
+}
+.process-halo {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 54px;
+  height: 54px;
+  margin-left: -27px;
+  border-radius: 50%;
+  border: 2px solid rgba(31,111,168,0.45);
+  opacity: 0;
 }
 .process-board-label {
   position: absolute;
@@ -1261,14 +1333,16 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   font-size: 11px;
   font-weight: 800;
   color: #0b1c2c;
-  background: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.88);
   border-radius: 999px;
   padding: 6px 8px;
+  z-index: 4;
 }
-.process-card.run .process-dot.d1 { animation: walkDot 0.9s ease 0.1s both; }
-.process-card.run .process-dot.d2 { animation: walkDot 0.9s ease 0.3s both; }
-.process-card.run .process-dot.d3 { animation: walkDot 0.9s ease 0.5s both; }
-.process-card.run .process-waiting { animation: taxiArrive 0.8s ease 0.45s both; }
+.process-card.run .process-path { animation: pathDraw 0.7s ease 0.15s both; }
+.process-card.run .process-waiting { animation: taxiArrive 0.75s ease 0.2s both; }
+.process-card.run .process-halo { animation: boardHalo 1.4s ease 0.35s both; }
+.process-card.run .process-walker { animation: walkerMove 1.35s cubic-bezier(.25,.8,.25,1) 0.45s both; }
+.process-card.run .process-board-label { animation: labelPop 0.55s ease 1.2s both; }
 
 .stage-sync { background: #0f141b; }
 .process-offline {
@@ -1305,12 +1379,26 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   40% { opacity: 1; transform: scale(1.4); }
   100% { opacity: 0.6; transform: scale(1); }
 }
-@keyframes walkDot {
-  from { opacity: 0.2; transform: translateY(6px); }
+@keyframes pathDraw {
+  from { transform: scaleX(0); opacity: 0.3; }
+  to { transform: scaleX(1); opacity: 0.95; }
+}
+@keyframes walkerMove {
+  0% { opacity: 0; transform: translateX(0) scale(0.7); }
+  12% { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 1; transform: translateX(118px) scale(1); }
+}
+@keyframes boardHalo {
+  0% { opacity: 0; transform: scale(0.5); }
+  40% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.55); }
+}
+@keyframes labelPop {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes taxiArrive {
-  from { opacity: 0.3; transform: translateX(18px); }
+  from { opacity: 0.2; transform: translateX(18px) scale(0.9); }
   to { opacity: 1; transform: none; }
 }
 @keyframes syncPulse {
@@ -1372,9 +1460,11 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   .promise, .road-card, .install-steps, .install-note, .cta,
   .demo-slide, .demo-type, .demo-tap, .demo-car, .demo-sheet-card, .demo-route-line,
   .process-card, .process-finger, .process-pin-drop, .process-radar,
-  .process-match-line, .process-spark, .process-dot, .process-waiting, .pulse-ring {
+  .process-match-line, .process-spark, .process-path, .process-walker,
+  .process-halo, .process-waiting, .process-board-label, .pulse-ring {
     transition: none; animation: none !important;
   }
+  .process-waiting, .process-walker, .process-path { opacity: 1 !important; transform: none !important; }
   .road-node {
     opacity: 1 !important;
     transform: none !important;

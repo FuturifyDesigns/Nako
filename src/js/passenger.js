@@ -1,21 +1,29 @@
 import { el, icon, clear } from "./dom.js";
 import { formatDistance, haversine, nearestLandmark, rankRoutes, suggestPlaces } from "./geo.js";
-import { animateFleet, simulateFleet } from "./simulate.js";
+import { getLang, t, toggleLang } from "./i18n.js";
+import { simulateFleet } from "./simulate.js";
 import { createVehicleLayer } from "./vehicle-layer.js";
 import { currentCatalog, onSync, startSync, track, trackOnce } from "./sync.js";
 
-const TYPES = [
-  { id: "taxi", name: "Taxi", detail: "Local cab", icon: "taxi" },
-  { id: "kombi", name: "Kombi", detail: "Minibus", icon: "kombi" },
-  { id: "bus", name: "Bus", detail: "Coach", icon: "bus" }
-];
+function typeMeta() {
+  return [
+    { id: "taxi", name: t("taxi"), detail: t("taxiDetail"), icon: "taxi" },
+    { id: "kombi", name: t("kombi"), detail: t("kombiDetail"), icon: "kombi" },
+    { id: "bus", name: t("bus"), detail: t("busDetail"), icon: "bus" }
+  ];
+}
 
-const STATUS = {
-  live: "Live sync",
-  syncing: "Syncing",
-  offline: "Offline",
-  saved: "Saved on this phone"
-};
+function statusLabel(state) {
+  if (state === "nearby") return t("statusNearby");
+  if (state === "on_way") return t("statusOnWay");
+  return t("statusAtRank");
+}
+
+function labelFor(type) {
+  if (type === "taxi") return t("taxi");
+  if (type === "bus") return t("bus");
+  return t("kombi");
+}
 
 export async function mountPassenger(root) {
   const state = {
@@ -31,7 +39,6 @@ export async function mountPassenger(root) {
     watchStop: null,
     searching: false,
     fleet: [],
-    baseFleet: [],
     selectedVehicle: null,
     followHint: true
   };
@@ -42,70 +49,87 @@ export async function mountPassenger(root) {
   shell.append(form, results);
   root.append(shell);
 
-  const statusEl = el("span", { class: "sync-pill", text: "Syncing" });
+  const langBtn = el("button", { type: "button", class: "lang-toggle", onclick: () => { toggleLang(); rebuildForm(); } });
   const suggestionBox = el("div", { class: "suggestions", hidden: true });
   const zoneBlock = el("div", { class: "zone-block" });
   const routeSelect = el("select", { id: "route-select", "aria-label": "Route" });
   const routeHint = el("p", { class: "hint" });
-  const locationLabel = el("p", { class: "location-label", text: "Location is off. We'll use the town centre." });
+  const locationLabel = el("p", { class: "location-label" });
   const recommendBox = el("div", { class: "recommend", hidden: true });
+  const typeGrid = el("div", { class: "type-grid" });
+  const chips = el("div", { class: "chips", id: "popular-chips" });
+  const title = el("h1");
+  const lede = el("p", { class: "lede" });
+  const stepTransport = el("h2", { class: "step" });
+  const stepPlace = el("h2", { class: "step" });
+  const stepLocation = el("h2", { class: "step" });
+  const stepRoute = el("h2", { class: "step" });
+  const routeKind = el("span", { class: "step-note", id: "route-kind" });
+  const placeInput = el("input", {
+    id: "place-input",
+    value: state.query,
+    autocomplete: "off",
+    "aria-label": "Town",
+    oninput: (event) => onQuery(event.target.value),
+    onfocus: () => showSuggestions(true)
+  });
+  const findBtn = el("button", { type: "button", class: "find", onclick: () => openResults({ pinFirst: false }) });
+  const useLocBtn = el("button", { type: "button", class: "ghost", onclick: toggleGps });
+  const pinBtn = el("button", { type: "button", class: "ghost", onclick: () => openResults({ pinFirst: true }) });
 
   form.append(
-    el("div", { class: "finder-top" }, [
-      el("div", { class: "guest-pill" }, [el("span", { class: "dot" }), "Guest-first passenger access"]),
-      statusEl
+    el("div", { class: "finder-top" }, [langBtn]),
+    title,
+    lede,
+    stepTransport,
+    typeGrid,
+    stepPlace,
+    el("div", { class: "field" }, [
+      icon("pin"),
+      placeInput,
+      el("button", { type: "button", class: "icon-button", "aria-label": "Clear", onclick: () => onQuery("") }, [icon("close")])
     ]),
-    el("h1", { text: "Know what's coming." }),
-    el("p", { class: "lede", text: "Choose a taxi, kombi, or bus, then a town and route. Nearby vehicles are simulated until trackers are fitted." }),
-    el("h2", { class: "step", text: "1. Select transport type" }),
-    el("div", { class: "type-grid" }, TYPES.map((type) => {
+    suggestionBox,
+    chips,
+    zoneBlock,
+    stepLocation,
+    el("div", { class: "location-actions" }, [useLocBtn, pinBtn]),
+    locationLabel,
+    el("div", { class: "step-row" }, [stepRoute, routeKind]),
+    routeSelect,
+    routeHint,
+    recommendBox,
+    findBtn
+  );
+
+  function rebuildForm() {
+    langBtn.textContent = t("otherLang");
+    title.textContent = t("appTitle");
+    lede.textContent = t("appLede");
+    stepTransport.textContent = t("stepTransport");
+    stepPlace.textContent = t("stepPlace");
+    stepLocation.textContent = t("stepLocation");
+    stepRoute.textContent = t("stepRoute");
+    placeInput.placeholder = t("placePlaceholder");
+    useLocBtn.replaceChildren(icon("locate"), document.createTextNode(t("useLocation")));
+    pinBtn.replaceChildren(icon("pin"), document.createTextNode(t("pinMap")));
+    findBtn.replaceChildren(icon("plane"), document.createTextNode(t("findTransport")));
+    clear(typeGrid);
+    for (const type of typeMeta()) {
       const button = el("button", {
         type: "button",
         class: `type-card${type.id === state.transport ? " is-selected" : ""}`,
         "aria-pressed": type.id === state.transport ? "true" : "false",
-        onclick: () => selectTransport(type.id, button)
+        onclick: () => selectTransport(type.id)
       }, [icon(type.icon), el("strong", { text: type.name }), el("span", { text: type.detail })]);
       button.dataset.type = type.id;
-      return button;
-    })),
-    el("div", { class: "step-row" }, [
-      el("h2", { class: "step", text: "2. Town, city or village" }),
-      el("span", { class: "step-note", text: "Free-text entry" })
-    ]),
-    el("div", { class: "field" }, [
-      icon("pin"),
-      el("input", {
-        id: "place-input",
-        value: state.query,
-        placeholder: "Gaborone, Maun, Riverwalk…",
-        autocomplete: "off",
-        "aria-label": "Town, city or village",
-        oninput: (event) => onQuery(event.target.value),
-        onfocus: () => showSuggestions(true)
-      }),
-      el("button", { type: "button", class: "icon-button", "aria-label": "Clear place", onclick: () => onQuery("") }, [icon("close")])
-    ]),
-    suggestionBox,
-    el("div", { class: "chips", id: "popular-chips" }),
-    zoneBlock,
-    el("div", { class: "step-row" }, [
-      el("h2", { class: "step", text: "2C. Your location" }),
-      el("span", { class: "step-note", text: "Optional, more accurate" })
-    ]),
-    el("div", { class: "location-actions" }, [
-      el("button", { type: "button", class: "ghost", onclick: toggleGps }, [icon("locate"), "Use my location"]),
-      el("button", { type: "button", class: "ghost", onclick: () => openResults({ pinFirst: true }) }, [icon("pin"), "Pin on the map"])
-    ]),
-    locationLabel,
-    el("div", { class: "step-row" }, [
-      el("h2", { class: "step", text: "3. Route selector" }),
-      el("span", { class: "step-note", id: "route-kind", text: "Kombi corridors" })
-    ]),
-    routeSelect,
-    routeHint,
-    recommendBox,
-    el("button", { type: "button", class: "find", onclick: () => openResults({ pinFirst: false }) }, [icon("plane"), "Find transport"])
-  );
+      typeGrid.append(button);
+    }
+    routeKind.textContent = state.transport === "taxi" ? t("taxiRanks") : state.transport === "bus" ? t("busCorridors") : t("kombiCorridors");
+    updateZones();
+    updateRoutes();
+    updateLocation();
+  }
 
   routeSelect.addEventListener("change", () => {
     state.routeId = routeSelect.value;
@@ -120,21 +144,19 @@ export async function mountPassenger(root) {
   function selectTransport(id) {
     state.transport = id;
     state.routeId = "all";
-    for (const button of form.querySelectorAll(".type-card")) {
+    for (const button of typeGrid.querySelectorAll(".type-card")) {
       const on = button.dataset.type === id;
       button.classList.toggle("is-selected", on);
       button.setAttribute("aria-pressed", on ? "true" : "false");
     }
-    const kind = form.querySelector("#route-kind");
-    kind.textContent = id === "taxi" ? "Taxi ranks" : id === "bus" ? "Coach corridors" : "Kombi corridors";
+    routeKind.textContent = id === "taxi" ? t("taxiRanks") : id === "bus" ? t("busCorridors") : t("kombiCorridors");
     track("transport_select", { transport: id, city: state.place?.name });
     updateRoutes();
   }
 
   function onQuery(value) {
     state.query = value;
-    const input = form.querySelector("#place-input");
-    if (input.value !== value) input.value = value;
+    if (placeInput.value !== value) placeInput.value = value;
     state.suggestions = suggestPlaces(value, state.catalog);
     if (!value.trim()) {
       state.place = null;
@@ -188,20 +210,18 @@ export async function mountPassenger(root) {
     state.query = label;
     state.zoneId = zoneId;
     state.routeId = "all";
-    const input = form.querySelector("#place-input");
-    input.value = label;
+    placeInput.value = label;
     if (!silent) track("city_select", { city: place.name, transport: state.transport });
     updateZones();
     updateRoutes();
   }
 
   function renderChips() {
-    const wrap = form.querySelector("#popular-chips");
-    clear(wrap);
-    wrap.append(el("span", { class: "chip-label", text: "Popular" }));
+    clear(chips);
+    chips.append(el("span", { class: "chip-label", text: t("popular") }));
     for (const place of state.catalog.places.filter((item) => item.popular)) {
       const on = state.place?.id === place.id && state.query === place.name;
-      wrap.append(el("button", {
+      chips.append(el("button", {
         type: "button",
         class: `chip${on ? " is-selected" : ""}`,
         onclick: () => {
@@ -219,16 +239,11 @@ export async function mountPassenger(root) {
     const zones = state.place?.zones || [];
     if (!zones.length) return;
     zoneBlock.append(
-      el("div", { class: "step-row" }, [
-        el("h2", { class: "step", text: `2B. ${state.place.name} suburb / locality` }),
-        el("span", { class: "active-pill", text: "Active" }),
-        el("span", { class: "step-note", text: "Secondary zone filter" })
-      ]),
+      el("h2", { class: "step", text: t("stepZone", { place: state.place.name }) }),
       el("div", { class: "zone-grid" }, [
-        zoneButton("all", "All suburbs", `Entire ${state.place.name}`),
+        zoneButton("all", t("allSuburbs"), t("entirePlace", { place: state.place.name })),
         ...zones.map((zone) => zoneButton(zone.id, zone.name, zone.summary))
-      ]),
-      el("p", { class: "hint", text: "Choosing a locality focuses the search on that part of town and filters matching routes." })
+      ])
     );
   }
 
@@ -244,7 +259,7 @@ export async function mountPassenger(root) {
         updateZones();
         updateRoutes();
       }
-    }, [el("strong", { text: name }), el("span", { text: summary }), on ? el("i", { class: "zone-dot" }) : null]);
+    }, [el("strong", { text: name }), el("span", { text: summary })]);
   }
 
   function filteredRoutes() {
@@ -264,15 +279,18 @@ export async function mountPassenger(root) {
     const routes = filteredRoutes();
     const previous = state.routeId;
     clear(routeSelect);
-    const placeName = state.place?.name || "this town";
-    routeSelect.append(el("option", { value: "all", text: state.place ? `All routes in ${placeName} (${routes.length} available)` : "Choose a town first" }));
+    const placeName = state.place?.name || "";
+    routeSelect.append(el("option", {
+      value: "all",
+      text: state.place ? t("allRoutes", { place: placeName, count: String(routes.length) }) : t("chooseTownFirst")
+    }));
     for (const route of routes) routeSelect.append(el("option", { value: route.id, text: route.name }));
     state.routeId = routes.some((route) => route.id === previous) ? previous : "all";
     routeSelect.value = state.routeId;
     routeSelect.disabled = !state.place;
     routeHint.textContent = state.place
-      ? (routes.length ? "You can keep all routes, or pick one. A suggestion appears when we can judge distance." : "No published routes for this selection yet. The association can add them.")
-      : "Start with a town. Popular towns are listed under the field.";
+      ? (routes.length ? t("routeHintReady") : t("routeHintEmpty"))
+      : t("routeHintStart");
     renderChips();
     updateRecommendation();
   }
@@ -286,13 +304,12 @@ export async function mountPassenger(root) {
       return;
     }
     const best = ranked[0];
-    const precise = state.pointSource === "gps" || state.pointSource === "pin" || state.pointSource === "typed";
     recommendBox.hidden = false;
     recommendBox.append(
-      el("p", { text: `${best.route.name} is the closest published corridor to ${precise ? "your pin" : "the area you selected"}, about ${formatDistance(best.distance)} away.` }),
+      el("p", { text: t("closestRoute", { name: best.route.name, distance: formatDistance(best.distance) }) }),
       el("div", { class: "recommend-actions" }, [
-        el("button", { type: "button", class: "text-button", onclick: () => acceptRecommendation(best.route.id) }, ["Use this route"]),
-        el("button", { type: "button", class: "text-button muted", onclick: () => skipRecommendation() }, ["I'll decide"])
+        el("button", { type: "button", class: "text-button", onclick: () => acceptRecommendation(best.route.id) }, [t("useRoute")]),
+        el("button", { type: "button", class: "text-button muted", onclick: () => skipRecommendation() }, [t("illDecide")])
       ])
     );
   }
@@ -313,13 +330,17 @@ export async function mountPassenger(root) {
   function updateLocation() {
     const point = state.point;
     if (!point) {
-      locationLabel.textContent = state.place ? `Location is off. We'll use ${state.place.name} centre unless you pin a spot.` : "Turn location on, pin the map, or type a place such as Riverwalk.";
+      locationLabel.textContent = state.place
+        ? t("locationOffPlace", { place: state.place.name })
+        : t("locationHint");
       updateRecommendation();
       return;
     }
     const near = nearestLandmark(state.place?.landmarks, point);
-    const source = state.pointSource === "gps" ? "Current location" : state.pointSource === "pin" ? "Pinned" : "Entered place";
-    locationLabel.textContent = near ? `${source}: near ${near.landmark.name} (${formatDistance(near.distance)}).` : `${source} set. Recommendations use this point.`;
+    const source = state.pointSource === "gps" ? t("locationCurrent") : state.pointSource === "pin" ? t("locationPinned") : t("locationTyped");
+    locationLabel.textContent = near
+      ? t("nearLandmark", { source, name: near.landmark.name, distance: formatDistance(near.distance) })
+      : t("locationSet", { source });
     updateRecommendation();
   }
 
@@ -337,10 +358,10 @@ export async function mountPassenger(root) {
       return;
     }
     if (!navigator.geolocation) {
-      locationLabel.textContent = "This browser cannot share location. Pin the map or type a place.";
+      locationLabel.textContent = t("locationDenied");
       return;
     }
-    locationLabel.textContent = "Finding your location…";
+    locationLabel.textContent = t("locationFinding");
     stopGps();
     state.watchStop = navigator.geolocation.watchPosition((position) => {
       state.point = { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -349,14 +370,14 @@ export async function mountPassenger(root) {
       track("location_set", { city: state.place?.name, transport: state.transport });
     }, () => {
       state.pointSource = "";
-      locationLabel.textContent = "Location permission was declined. You can still pin the map or type a place.";
+      locationLabel.textContent = t("locationDenied");
     }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 12000 });
   }
 
   function openResults({ pinFirst }) {
     if (!state.place) {
-      routeHint.textContent = "Choose a town before searching.";
-      form.querySelector("#place-input").focus();
+      routeHint.textContent = t("routeHintNeedTown");
+      placeInput.focus();
       return;
     }
     const routes = filteredRoutes();
@@ -377,11 +398,9 @@ export async function mountPassenger(root) {
 
   let map;
   let layer;
-  let frame;
 
   function destroyMap() {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
+    layer?.clear?.();
     if (map) map.remove();
     map = null;
     layer = null;
@@ -395,36 +414,38 @@ export async function mountPassenger(root) {
     const working = ranked.length ? ranked : [];
     const active = chosen || working[0]?.route || null;
     const distance = working.find((item) => item.route.id === active?.id)?.distance;
-    state.baseFleet = simulateFleet({
+    state.fleet = simulateFleet({
       routes: [active, working.find((item) => item.route.id !== active?.id)?.route].filter(Boolean),
       point,
       distanceTo: distance,
       type: state.transport
     });
-    state.fleet = state.baseFleet;
-    const routesForAnim = [active, working[1]?.route].filter(Boolean);
 
     const mapCanvas = el("div", { class: "map-canvas" });
     const sheet = el("section", { class: "sheet" });
     const searchVeil = el("div", { class: "veil" }, [
       el("div", { class: "radar" }),
-      el("p", { text: "Checking the rank near you" }),
-      el("span", { text: "Simulated search. Live trackers are not connected yet." })
+      el("p", { text: t("checkingRank") })
     ]);
+    const pickupLabel = el("div", { class: "pickup-label", hidden: true }, [
+      el("span", { class: "pickup-kicker", text: t("pickup") }),
+      el("strong", { class: "pickup-name", text: state.place.name })
+    ]);
+
     results.append(
       mapCanvas,
       el("header", { class: "map-bar" }, [
-        el("button", { type: "button", class: "back", onclick: () => history.back() }, ["Back"]),
+        el("button", { type: "button", class: "back", onclick: () => history.back() }, [t("back")]),
         el("div", {}, [
-          el("strong", { text: active ? active.name : "No published route" }),
+          el("strong", { text: active ? active.name : t("noRoute") }),
           el("span", { text: `${state.place.name} · ${labelFor(state.transport)}` })
-        ]),
-        el("span", { class: "sim-chip", text: "Simulated" })
+        ])
       ]),
       el("div", { class: "map-tools" }, [
-        el("button", { type: "button", class: "tool", onclick: toggleGpsFromMap }, [icon("locate"), "Location"]),
-        el("button", { type: "button", class: "tool", id: "pin-tool", onclick: () => setPinMode(true) }, [icon("pin"), "Move pin"])
+        el("button", { type: "button", class: "tool", "aria-label": t("location"), onclick: toggleGpsFromMap }, [icon("locate")]),
+        el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
       ]),
+      pickupLabel,
       searchVeil,
       sheet
     );
@@ -437,15 +458,18 @@ export async function mountPassenger(root) {
       const best = working[0];
       const offer = best && current && best.route.id !== current.id;
       const banner = offer ? el("div", { class: "recommend in-sheet" }, [
-        el("p", { text: `Closer option: ${best.route.name}, about ${formatDistance(best.distance)} away.` }),
-        el("button", { type: "button", class: "text-button", onclick: () => switchRoute(best.route) }, ["Use recommended"]),
-        el("button", { type: "button", class: "text-button muted", onclick: () => { banner.remove(); track("recommendation_skip", { city: state.place.name, transport: state.transport, routeId: current.id }); } }, ["Keep my choice"])
+        el("p", { text: t("closerOption", { name: best.route.name, distance: formatDistance(best.distance) }) }),
+        el("button", { type: "button", class: "text-button", onclick: () => switchRoute(best.route) }, [t("useRecommended")]),
+        el("button", { type: "button", class: "text-button muted", onclick: () => { banner.remove(); track("recommendation_skip", { city: state.place.name, transport: state.transport, routeId: current.id }); } }, [t("keepChoice")])
       ]) : null;
       const pieces = [
         el("div", { class: "sheet-handle" }),
-        el("p", { class: "sheet-kicker", text: state.fleet.length ? `${state.fleet.length} simulated ${labelFor(state.transport)}${state.fleet.length === 1 ? "" : "s"} idling` : "No vehicles to place" }),
-        el("h2", { text: current ? current.name : "Routes can be added by the association" }),
-        el("p", { class: "sheet-copy", text: current?.summary || "Nothing is published here yet. You can still look around the town centre." }),
+        el("p", {
+          class: "sheet-kicker",
+          text: state.fleet.length ? t("vehiclesNearby", { count: String(state.fleet.length) }) : t("noVehicles")
+        }),
+        el("h2", { text: current ? current.name : t("routesCanBeAdded") }),
+        el("p", { class: "sheet-copy", text: current?.summary || t("nothingPublished") }),
         banner,
         el("div", { class: "vehicle-list" }, state.fleet.map((vehicle) => el("button", {
           type: "button",
@@ -453,14 +477,13 @@ export async function mountPassenger(root) {
           onclick: () => selectVehicle(vehicle)
         }, [
           el("strong", { text: `${labelFor(vehicle.type)} · ${vehicle.plate}` }),
-          el("span", { text: `${vehicle.routeName} · Idling · ${formatDistance(haversine(point || focusPoint(), vehicle))}` }),
-          el("em", { text: "Simulated" })
+          el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}` })
         ])))
       ];
       if (working.length > 1) {
-        pieces.push(el("label", { class: "sheet-switch", text: "Choose another route" }));
+        pieces.push(el("label", { class: "sheet-switch", text: t("otherRoute") }));
         pieces.push(el("select", {
-          "aria-label": "Choose another route",
+          "aria-label": t("otherRoute"),
           onchange: (event) => {
             const next = working.find((item) => item.route.id === event.target.value)?.route;
             if (next) switchRoute(next);
@@ -486,13 +509,18 @@ export async function mountPassenger(root) {
       const rankedNow = rankRoutes(filteredRoutes(), focusPoint() || point);
       const distanceNow = rankedNow.find((item) => item.route.id === route.id)?.distance;
       const second = rankedNow.find((item) => item.route.id !== route.id)?.route;
-      state.baseFleet = simulateFleet({ routes: [route, second].filter(Boolean), point: focusPoint(), distanceTo: distanceNow, type: state.transport });
-      state.fleet = state.baseFleet;
-      routesForAnim.length = 0;
-      routesForAnim.push(...[route, second].filter(Boolean));
+      state.fleet = simulateFleet({
+        routes: [route, second].filter(Boolean),
+        point: focusPoint(),
+        distanceTo: distanceNow,
+        type: state.transport
+      });
       drawRoute(route, rankedNow.map((item) => item.route));
+      layer?.setVehicles(state.fleet);
+      layer?.setSelected(state.selectedVehicle);
       fillSheet(route);
       focusMap(route);
+      updatePickup();
     }
 
     function drawRoute(route, all) {
@@ -511,22 +539,34 @@ export async function mountPassenger(root) {
       if (!map) return;
       const spot = state.fleet[0] || route?.path?.[0] || focusPoint();
       if (!spot) return;
-      const length = route?.path?.reduce((sum, point, index) => index ? sum + haversine(route.path[index - 1], point) : 0, 0) || 0;
+      const length = route?.path?.reduce((sum, spotItem, index) => index ? sum + haversine(route.path[index - 1], spotItem) : 0, 0) || 0;
       map.easeTo({
         center: [spot.lng, spot.lat],
-        zoom: length > 30000 ? 14.8 : 16.2,
-        pitch: 62,
-        bearing: -24,
+        zoom: length > 30000 ? 14.6 : 15.8,
+        pitch: 48,
+        bearing: -18,
         padding: { top: 80, bottom: 360, left: 20, right: 20 },
         duration: 900
       });
+    }
+
+    function updatePickup() {
+      const pt = focusPoint();
+      if (!pt) {
+        pickupLabel.hidden = true;
+        return;
+      }
+      pickupLabel.hidden = false;
+      const name = pickupLabel.querySelector(".pickup-name");
+      const near = nearestLandmark(state.place?.landmarks, pt);
+      if (name) name.textContent = near?.landmark?.name || state.place.name;
     }
 
     function setPinMode(on) {
       pin.hidden = !on;
       const button = results.querySelector("#pin-tool");
       button.classList.toggle("is-on", on);
-      button.onclick = () => setPinMode(!pin.hidden ? false : true);
+      button.onclick = () => setPinMode(pin.hidden);
       if (!on && map) {
         const center = map.getCenter();
         state.point = { lat: center.lat, lng: center.lng };
@@ -548,26 +588,26 @@ export async function mountPassenger(root) {
     }
 
     fillSheet(active);
+    updatePickup();
 
     if (!globalThis.maplibregl) {
       searchVeil.hidden = true;
       state.searching = false;
-      sheet.prepend(el("p", { class: "hint", text: "The map library did not load. Route details are still available." }));
+      sheet.prepend(el("p", { class: "hint", text: "Map unavailable." }));
       return;
     }
 
     map = new maplibregl.Map({
       container: mapCanvas,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/dark",
       center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
-      zoom: 13.8,
-      pitch: 58,
-      bearing: -18,
-      maxPitch: 68,
+      zoom: 14.2,
+      pitch: 45,
+      bearing: -12,
+      maxPitch: 60,
       attributionControl: true,
       canvasContextAttributes: { antialias: true }
     });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.on("load", () => {
       map.resize();
       map.addSource("corridors", {
@@ -575,37 +615,38 @@ export async function mountPassenger(root) {
         data: { type: "FeatureCollection", features: [] }
       });
       map.addLayer({
+        id: "corridor-glow",
+        type: "line",
+        source: "corridors",
+        paint: {
+          "line-color": ["case", ["==", ["get", "chosen"], 1], "#4ea1ff", "#5b6b7c"],
+          "line-width": ["case", ["==", ["get", "chosen"], 1], 10, 5],
+          "line-opacity": 0.28,
+          "line-blur": 2
+        }
+      });
+      map.addLayer({
         id: "corridor-line",
         type: "line",
         source: "corridors",
         paint: {
-          "line-color": ["case", ["==", ["get", "chosen"], 1], "#1f6feb", "#90a4b8"],
-          "line-width": ["case", ["==", ["get", "chosen"], 1], 5, 2.5],
+          "line-color": ["case", ["==", ["get", "chosen"], 1], "#6eb6ff", "#8a9aab"],
+          "line-width": ["case", ["==", ["get", "chosen"], 1], 4, 2],
           "line-opacity": 0.95
         }
       });
       layer = createVehicleLayer(maplibregl);
       map.addLayer(layer);
       drawRoute(active, working.map((item) => item.route));
+      layer.setVehicles(state.fleet);
       focusMap(active || { path: [point || focusPoint()] });
-      const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 300 : 2200;
+      const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 200 : 900;
       window.setTimeout(() => {
         state.searching = false;
         searchVeil.hidden = true;
         if (pinFirst) setPinMode(true);
-        loop(performance.now());
       }, delay);
     });
-
-    function loop(now) {
-      if (results.hidden) return;
-      if (!state.searching && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        state.fleet = animateFleet(state.baseFleet, routesForAnim, now);
-      }
-      layer?.setVehicles(state.searching ? [] : state.fleet);
-      layer?.setSelected(state.selectedVehicle);
-      frame = requestAnimationFrame(loop);
-    }
   }
 
   window.addEventListener("popstate", () => {
@@ -616,25 +657,23 @@ export async function mountPassenger(root) {
     updateLocation();
   });
 
-  onSync(({ catalog, status }) => {
+  onSync(({ catalog }) => {
     state.catalog = catalog;
     if (state.place) state.place = catalog.places.find((place) => place.id === state.place.id) || state.place;
-    statusEl.textContent = STATUS[status] || "Saved";
-    statusEl.dataset.state = status;
     if (!results.hidden) return;
     updateZones();
     updateRoutes();
   });
 
+  document.addEventListener("nako-lang", () => {
+    if (!results.hidden) return;
+    rebuildForm();
+  });
+
+  rebuildForm();
   const initial = state.catalog.places.find((place) => place.name === "Gaborone");
   if (initial) choosePlace(initial, "Gaborone", "all", true);
   else updateRoutes();
   await startSync();
-  trackOnce("app_open", { city: state.place?.name, transport: state.transport });
-}
-
-function labelFor(type) {
-  if (type === "taxi") return "Taxi";
-  if (type === "bus") return "Bus";
-  return "Kombi";
+  trackOnce("app_open", { city: state.place?.name, transport: state.transport, lang: getLang() });
 }

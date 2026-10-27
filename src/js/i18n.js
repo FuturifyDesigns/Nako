@@ -1,0 +1,305 @@
+const STORAGE_KEY = "nako-lang";
+
+const STRINGS = {
+  en: {
+    langName: "English",
+    otherLang: "Setswana",
+    brandSub: "taxi rank network",
+    eyebrow: "Not ride-hailing",
+    heroTitle: "Know what’s coming.",
+    heroTitleEm: "coming",
+    heroLead: "Botswana’s ranks, on your phone. Spot a corridor near you, then catch a taxi, kombi, or coach the way people already do.",
+    downloadApp: "Download the app",
+    desktopNote: "Use your phone or tablet to download the Nako app. This site is for reading about the network.",
+    phaseOne: "Phase one",
+    howTitle: "Open the app. Pick a ride. Stand at the right rank.",
+    howLead: "This website explains the network. Searching routes happens in the phone app, so it still works when the signal drops.",
+    promise1Title: "Taxi, kombi, or coach",
+    promise1Body: "Start with the ride you want. In Gaborone you can narrow it to CBD, Broadhurst, Mogoditshane, Game City, and the rest.",
+    promise2Title: "Your spot on the map",
+    promise2Body: "Turn location on, pin the street, or type a place people actually say out loud: Riverwalk, Block 8, Station.",
+    promise3Title: "A route, not a lecture",
+    promise3Body: "Nako points to a nearby corridor. Keep it, or ignore it and choose another. You’re still the one boarding.",
+    truth: "Vehicles on the map show where drivers typically wait. Live trackers for drivers come later.",
+    network: "The network",
+    roadTitle: "Built for ranks. Growing with the association.",
+    roadLead: "Nine pieces of the full Nako network. Hover a card to see where each one sits.",
+    road1: "Auth + roles",
+    road1Body: "Passenger, driver, fleet owner, and association each get their own door.",
+    road2: "Drivers + vehicles",
+    road2Body: "Register drivers and keep vehicle details where the rank can see them.",
+    road3: "Taxi ranks",
+    road3Body: "Digitise the ranks so people know what is waiting before they walk over.",
+    road4: "Online GPS",
+    road4Body: "Live vehicle location and status once the trackers are fitted.",
+    road5: "Rank check-in",
+    road5Body: "Drivers check in and out at the rank with QR or location.",
+    road6: "Passenger discovery",
+    road6Body: "Find nearby ranks and available taxis without calling around.",
+    road7: "QR verification",
+    road7Body: "Scan a vehicle and confirm it belongs on the platform.",
+    road8: "Owner dashboard",
+    road8Body: "Fleet owners watch performance without standing at the rank all day.",
+    road9: "Association tools",
+    road9Body: "Monitor ranks, drivers, routes, and compliance from one place.",
+    onPhone: "On your phone",
+    installTitle: "The finder lives on phones and tablets.",
+    installLead: "Laptops and desktops stay on this information site. Open Nako on a phone or tablet to install the app and search routes.",
+    androidTitle: "Android phone or tablet",
+    androidBody: "Open this site in Chrome, tap Download the app, confirm Install, then open Nako from the icon.",
+    iosTitle: "iPhone or iPad",
+    iosBody: "Tap Share, then Add to Home Screen, then open the Nako icon.",
+    offlineTitle: "Use it offline",
+    offlineBody: "Saved routes stay on the device. When you’re back online, Nako syncs quietly.",
+    computerTitle: "On a computer?",
+    computerBody: "You’re in the right place to learn about Nako. Grab your phone, open this same link, and install from there when you want the route finder.",
+    copyright: "© 2026 Nako. All rights reserved.",
+    builtBy: "built by",
+    // App
+    appTitle: "Where to?",
+    appLede: "Pick taxi, kombi, or bus, then your town and route.",
+    stepTransport: "Transport",
+    stepPlace: "Town or place",
+    stepZone: "Area in {place}",
+    stepLocation: "Your location",
+    stepRoute: "Route",
+    popular: "Popular",
+    allSuburbs: "All areas",
+    entirePlace: "Whole of {place}",
+    useLocation: "Use my location",
+    pinMap: "Pin on map",
+    findTransport: "Find transport",
+    locationOff: "Location is off. We’ll use the town centre.",
+    locationOffPlace: "Location is off. We’ll use {place} centre unless you pin a spot.",
+    locationHint: "Turn location on, pin the map, or type a place such as Riverwalk.",
+    locationFinding: "Finding your location…",
+    locationDenied: "Location permission was declined. You can still pin the map or type a place.",
+    locationCurrent: "Current location",
+    locationPinned: "Pinned",
+    locationTyped: "Entered place",
+    nearLandmark: "{source}: near {name} ({distance}).",
+    locationSet: "{source} set.",
+    chooseTownFirst: "Choose a town first",
+    allRoutes: "All routes in {place} ({count})",
+    routeHintReady: "Keep all routes, or pick one.",
+    routeHintEmpty: "No routes for this selection yet.",
+    routeHintStart: "Start with a town. Popular towns are under the field.",
+    routeHintNeedTown: "Choose a town before searching.",
+    closestRoute: "{name} is closest — about {distance} away.",
+    useRoute: "Use this route",
+    illDecide: "I’ll decide",
+    taxi: "Taxi",
+    kombi: "Kombi",
+    bus: "Bus",
+    taxiDetail: "Local cab",
+    kombiDetail: "Minibus",
+    busDetail: "Coach",
+    taxiRanks: "Taxi ranks",
+    kombiCorridors: "Kombi corridors",
+    busCorridors: "Coach corridors",
+    back: "Back",
+    location: "Location",
+    movePin: "Move pin",
+    checkingRank: "Checking the rank near you",
+    vehiclesNearby: "{count} nearby",
+    noVehicles: "No vehicles to show",
+    statusNearby: "Nearby",
+    statusOnWay: "On the way",
+    statusAtRank: "At the rank",
+    closerOption: "Closer: {name}, about {distance}.",
+    useRecommended: "Use recommended",
+    keepChoice: "Keep my choice",
+    otherRoute: "Another route",
+    noRoute: "No published route",
+    routesCanBeAdded: "Routes can be added by the association",
+    nothingPublished: "Nothing is published here yet. You can still look around town.",
+    placePlaceholder: "Gaborone, Maun, Riverwalk…",
+    clearPlace: "Clear place",
+    gateTitle: "Download the app for full access.",
+    gateLede: "Choosing a taxi, kombi, or bus and seeing routes opens in the installed Nako app on your phone or tablet.",
+    gateDesktopTitle: "Use your phone for the app.",
+    gateDesktopLede: "Nako’s route finder installs on phones and tablets only. On a laptop, this site is for information.",
+    backOverview: "Back to the overview",
+    addToPhone: "Add it to your phone",
+    androidShort: "Android: tap Download the app and confirm Install.",
+    iosShort: "iPhone or iPad: tap Share, then Add to Home Screen, then open the Nako icon.",
+    pickup: "Your spot"
+  },
+  tn: {
+    langName: "Setswana",
+    otherLang: "English",
+    brandSub: "maraka a ditekisi",
+    eyebrow: "Ga se go thapa tekisi",
+    heroTitle: "Itsi se se tlang.",
+    heroTitleEm: "tlang",
+    heroLead: "Maraka a Botswana mo fonong ya gago. Bona tsela e e gaufi, o tsene tekisi, khombi, kgotsa bese jaaka batho ba dira.",
+    downloadApp: "Kopolola app",
+    desktopNote: "Dirisa fonô kgotsa tablet go kopolola app ya Nako. Websaete e ke ya go buisa ka neteweke.",
+    phaseOne: "Kgato ya ntlha",
+    howTitle: "Bula app. Tlhopha loeto. Ema kwa setaleng se se siameng.",
+    howLead: "Websaete e e tlhalosa neteweke. Go batla ditsela go diragala mo app ya fonô, e bile e dira le fa neteweke e fokotsegile.",
+    promise1Title: "Tekisi, khombi, kgotsa bese",
+    promise1Body: "Simolola ka loeto lo o batlang. Mo Gaborone o ka fokotsa go ya kwa CBD, Broadhurst, Mogoditshane, Game City, le tse dingwe.",
+    promise2Title: "Lefelo la gago mo mape",
+    promise2Body: "Bula location, bea pin mo mmileng, kgotsa kwala lefelo le batho ba le bidiang: Riverwalk, Block 8, Station.",
+    promise3Title: "Tsela, e seng thuto",
+    promise3Body: "Nako e supa corridor e e gaufi. E tsaya, kgotsa tlhopha e nngwe. Wena o santse o tsena.",
+    truth: "Dikoloi mo mape di bontsha kwa bakgweetsi ba emang gantsi teng. Di-tracker tsa nnete di tla morago.",
+    network: "Neteweke",
+    roadTitle: "E agilwe bakeng sa maraka. E gola le association.",
+    roadLead: "Dikarolo di le robongwe tsa neteweke ya Nako. Hover card go bona maemo a nngwe le nngwe.",
+    road1: "Auth + roles",
+    road1Body: "Mopalami, mokgweetsi, mong wa difoloto, le association mongwe le mongwe o na le kgoro ya gagwe.",
+    road2: "Bakgweetsi + dikoloi",
+    road2Body: "Kwala bakgweetsi o be o boloka dintlha tsa dikoloi kwa setaleng se ka di bonang.",
+    road3: "Maraka a ditekisi",
+    road3Body: "Digitaiza maraka gore batho ba itse se se emeng pele ba ya.",
+    road4: "GPS ya online",
+    road4Body: "Lefelo le maemo a koloi fa di-tracker di tsentswe.",
+    road5: "Check-in kwa setaleng",
+    road5Body: "Bakgweetsi ba check-in le check-out kwa setaleng ka QR kgotsa location.",
+    road6: "Go batla bakeng sa bapalami",
+    road6Body: "Bona maraka a gaufi le ditekisi tse di teng ntle le go letsetsa.",
+    road7: "Tiriso ya QR",
+    road7Body: "Skena koloi o netefatse gore e tswa mo platform.",
+    road8: "Dashboard ya mong",
+    road8Body: "Beng ba difoloto ba lebelela tiriso ntle le go ema kwa setaleng letsatsi lotlhe.",
+    road9: "Didirisiwa tsa association",
+    road9Body: "Tlhatlhoba maraka, bakgweetsi, ditsela, le go latelela melao mo lefelong le le lengwe.",
+    onPhone: "Mo fonong ya gago",
+    installTitle: "Finder e nna mo difonong le di-tablet.",
+    installLead: "Di-laptop le di-desktop di sala mo websaeteng ya tshedimosetso. Bula Nako mo fonong kgotsa tablet go kopolola app le go batla ditsela.",
+    androidTitle: "Fonô kgotsa tablet ya Android",
+    androidBody: "Bula websaete e mo Chrome, tobetsa Kopolola app, netefatsa Install, mme o bule Nako go tswa mo icon.",
+    iosTitle: "iPhone kgotsa iPad",
+    iosBody: "Tobetsa Share, Add to Home Screen, mme o bule icon ya Nako.",
+    offlineTitle: "E dirise o sa connected",
+    offlineBody: "Ditsela tse di bolokilweng di sala mo device. Fa o boa online, Nako e sync ka go iketla.",
+    computerTitle: "O mo computer?",
+    computerBody: "O mo lefelong le le siameng go ithuta ka Nako. Tsaya fonô, bula link e e tshwanang, o kopolole app fa o batla finder.",
+    copyright: "© 2026 Nako. Ditshwanelo tsotlhe di sireleditswe.",
+    builtBy: "e agilwe ke",
+    appTitle: "O ya kae?",
+    appLede: "Tlhopha tekisi, khombi, kgotsa bese, mme o tlhophe toropo le tsela.",
+    stepTransport: "Mofuta wa koloi",
+    stepPlace: "Toropo kgotsa lefelo",
+    stepZone: "Kgaolo mo {place}",
+    stepLocation: "Lefelo la gago",
+    stepRoute: "Tsela",
+    popular: "Tse di itsegeng",
+    allSuburbs: "Dikgaolo tsotlhe",
+    entirePlace: "{place} yotlhe",
+    useLocation: "Dirisa lefelo la me",
+    pinMap: "Bea pin mo mape",
+    findTransport: "Batla koloi",
+    locationOff: "Location e tswetswe. Re tla dirisa setlhare sa toropo.",
+    locationOffPlace: "Location e tswetswe. Re tla dirisa setlhare sa {place} fa o sa bee pin.",
+    locationHint: "Bula location, bea pin, kgotsa kwala lefelo jaaka Riverwalk.",
+    locationFinding: "Re batla lefelo la gago…",
+    locationDenied: "Tetla ya location e ganetswe. O ka bea pin kgotsa o kwale lefelo.",
+    locationCurrent: "Lefelo la jaanong",
+    locationPinned: "E beilwe ka pin",
+    locationTyped: "Lefelo le le kwadilweng",
+    nearLandmark: "{source}: gaufi le {name} ({distance}).",
+    locationSet: "{source} e behilwe.",
+    chooseTownFirst: "Tlhopha toropo pele",
+    allRoutes: "Ditsela tsotlhe mo {place} ({count})",
+    routeHintReady: "Tshwara ditsela tsotlhe, kgotsa tlhopha e le nngwe.",
+    routeHintEmpty: "Ga go na ditsela tsa tlhopho e.",
+    routeHintStart: "Simolola ka toropo. Tse di itsegeng di fa tlase ga field.",
+    routeHintNeedTown: "Tlhopha toropo pele o batla.",
+    closestRoute: "{name} e gaufi — sekai sa {distance}.",
+    useRoute: "Dirisa tsela e",
+    illDecide: "Ke tla tlhopha",
+    taxi: "Tekisi",
+    kombi: "Khombi",
+    bus: "Bese",
+    taxiDetail: "Cab ya selegae",
+    kombiDetail: "Minibus",
+    busDetail: "Coach",
+    taxiRanks: "Maraka a ditekisi",
+    kombiCorridors: "Ditsela tsa dikhombi",
+    busCorridors: "Ditsela tsa dibese",
+    back: "Morago",
+    location: "Lefelo",
+    movePin: "Sutisa pin",
+    checkingRank: "Re tlhatlhoba setala se se gaufi",
+    vehiclesNearby: "{count} di gaufi",
+    noVehicles: "Ga go na dikoloi tse di bontshiwang",
+    statusNearby: "Gaufi",
+    statusOnWay: "Mo tseleng",
+    statusAtRank: "Kwa setaleng",
+    closerOption: "E gaufi: {name}, sekai sa {distance}.",
+    useRecommended: "Dirisa e e atlenegisitsweng",
+    keepChoice: "Tshwara tlhopho ya me",
+    otherRoute: "Tsela e nngwe",
+    noRoute: "Ga go na tsela e e phasaladitsweng",
+    routesCanBeAdded: "Association e ka oketsa ditsela",
+    nothingPublished: "Ga go na se se phasaladitsweng fa. O ka ntse o leba toropo.",
+    placePlaceholder: "Gaborone, Maun, Riverwalk…",
+    clearPlace: "Phimola lefelo",
+    gateTitle: "Kopolola app go tsena ka botlalo.",
+    gateLede: "Go tlhopha tekisi, khombi, kgotsa bese le go bona ditsela go bulega mo app ya Nako e e kopolotsweng mo fonong kgotsa tablet.",
+    gateDesktopTitle: "Dirisa fonô bakeng sa app.",
+    gateDesktopLede: "Finder ya Nako e kopololwa fela mo difonong le di-tablet. Mo laptop, websaete e ke ya tshedimosetso.",
+    backOverview: "Boela kwa tshobokanyong",
+    addToPhone: "E tsenye mo fonong",
+    androidShort: "Android: tobetsa Kopolola app o netefatse Install.",
+    iosShort: "iPhone kgotsa iPad: tobetsa Share, Add to Home Screen, o bule icon ya Nako.",
+    pickup: "Lefelo la gago"
+  }
+};
+
+let current = "en";
+
+export function getLang() {
+  return current;
+}
+
+export function t(key, vars = {}) {
+  const table = STRINGS[current] || STRINGS.en;
+  let text = table[key] ?? STRINGS.en[key] ?? key;
+  for (const [name, value] of Object.entries(vars)) {
+    text = text.replaceAll(`{${name}}`, value ?? "");
+  }
+  return text;
+}
+
+export function setLang(lang) {
+  current = lang === "tn" ? "tn" : "en";
+  try { localStorage.setItem(STORAGE_KEY, current); } catch {}
+  document.documentElement.lang = current === "tn" ? "tn" : "en";
+  document.dispatchEvent(new CustomEvent("nako-lang", { detail: { lang: current } }));
+  return current;
+}
+
+export function initLang() {
+  let saved = "en";
+  try { saved = localStorage.getItem(STORAGE_KEY) || "en"; } catch {}
+  return setLang(saved);
+}
+
+export function toggleLang() {
+  return setLang(current === "tn" ? "en" : "tn");
+}
+
+export function applyLandingI18n(root = document) {
+  root.querySelectorAll("[data-i18n]").forEach((node) => {
+    const key = node.getAttribute("data-i18n");
+    if (!key) return;
+    if (node.dataset.i18nHtml === "title") {
+      const full = t(key);
+      const emWord = t(`${key}Em`);
+      if (emWord && full.includes(emWord)) {
+        node.innerHTML = full.replace(emWord, `<em>${emWord}</em>`);
+      } else {
+        node.textContent = full;
+      }
+      return;
+    }
+    node.textContent = t(key);
+  });
+  root.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    node.setAttribute("placeholder", t(node.getAttribute("data-i18n-placeholder")));
+  });
+}

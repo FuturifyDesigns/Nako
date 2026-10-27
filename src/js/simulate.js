@@ -1,4 +1,4 @@
-import { offsetPoint, pointAlong } from "./geo.js";
+import { haversine, offsetPoint, pointAlong } from "./geo.js";
 
 const LETTERS = "ABCDFGHJKLMNPQRSTVWXYZ";
 
@@ -20,10 +20,18 @@ function plate(seed) {
   return `B ${num} ${a}${b}${c}`;
 }
 
-function pushVehicle(list, route, fraction, side, type) {
+function statusFor(distance) {
+  if (distance == null) return "at_rank";
+  if (distance < 450) return "nearby";
+  if (distance < 2800) return "on_way";
+  return "at_rank";
+}
+
+function pushVehicle(list, route, fraction, side, type, point) {
   const spot = pointAlong(route.path, fraction) || route.path[0];
   const shifted = offsetPoint(spot, spot.bearing + 90, side);
-  const id = `${route.id}-${list.length}`;
+  const id = `${route.id}-${type}-${list.length}`;
+  const distance = point ? haversine(point, shifted) : null;
   list.push({
     id,
     plate: plate(id),
@@ -35,8 +43,8 @@ function pushVehicle(list, route, fraction, side, type) {
     bearing: spot.bearing,
     baseFraction: fraction,
     side,
-    state: "idling",
-    creep: type === "bus" ? 0 : 0.012
+    distance,
+    state: statusFor(distance)
   });
 }
 
@@ -44,28 +52,29 @@ export function simulateFleet({ routes, point, distanceTo, type }) {
   const fleet = [];
   const primary = routes[0];
   const secondary = routes[1];
+  const transport = type === "taxi" || type === "bus" ? type : "kombi";
   if (!primary) return fleet;
 
-  if (type === "bus" || (distanceTo ?? 0) > 8000) {
-    pushVehicle(fleet, primary, 0.04, 14, type);
-    pushVehicle(fleet, primary, 0.08, -16, type);
-    if (secondary) pushVehicle(fleet, secondary, 0.05, 12, type);
-    if (type !== "bus") {
-      pushVehicle(fleet, primary, 0.18, 18, type);
-      pushVehicle(fleet, primary, 0.28, -14, type);
+  if (transport === "bus" || (distanceTo ?? 0) > 8000) {
+    pushVehicle(fleet, primary, 0.04, 14, transport, point);
+    pushVehicle(fleet, primary, 0.08, -16, transport, point);
+    if (secondary) pushVehicle(fleet, secondary, 0.05, 12, transport, point);
+    if (transport !== "bus") {
+      pushVehicle(fleet, primary, 0.18, 18, transport, point);
+      pushVehicle(fleet, primary, 0.28, -14, transport, point);
     }
     return fleet;
   }
 
   const nearest = nearestFraction(primary, point);
-  const count = type === "taxi" ? 4 : 5;
+  const count = transport === "taxi" ? 4 : 5;
   for (let i = 0; i < count; i += 1) {
     const fraction = Math.min(0.92, Math.max(0.05, nearest + (i - 1) * 0.07));
-    pushVehicle(fleet, primary, fraction, i % 2 === 0 ? 16 : -16, type);
+    pushVehicle(fleet, primary, fraction, i % 2 === 0 ? 16 : -16, transport, point);
   }
   if (secondary) {
-    pushVehicle(fleet, secondary, 0.2, 14, type);
-    pushVehicle(fleet, secondary, 0.45, -18, type);
+    pushVehicle(fleet, secondary, 0.2, 14, transport, point);
+    pushVehicle(fleet, secondary, 0.45, -18, transport, point);
   }
   return fleet;
 }
@@ -87,17 +96,4 @@ function nearestFraction(route, point) {
     }
   }
   return bestT;
-}
-
-export function animateFleet(fleet, routes, timeMs) {
-  return fleet.map((vehicle, index) => {
-    if (!vehicle.creep) return vehicle;
-    const route = routes.find((item) => item.id === vehicle.routeId);
-    if (!route?.path?.length) return vehicle;
-    const wobble = Math.sin(timeMs / 1800 + index) * vehicle.creep;
-    const moved = pointAlong(route.path, Math.min(0.96, Math.max(0.02, vehicle.baseFraction + wobble)));
-    if (!moved) return vehicle;
-    const shifted = offsetPoint(moved, moved.bearing + 90, vehicle.side);
-    return { ...vehicle, lat: shifted.lat, lng: shifted.lng, bearing: moved.bearing };
-  });
 }

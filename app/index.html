@@ -12,30 +12,30 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Nako">
   <link rel="stylesheet" href="../vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="../assets/css/app.css?v=7">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.openfreemap.org; font-src 'self'; connect-src 'self' https://tiles.openfreemap.org https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co https://nominatim.openstreetmap.org; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
   <script src="../src/js/mode.js"></script>
 </head>
 <body>
   <div class="flag-ribbon"></div>
   <main id="gate" class="gate card" style="padding:22px">
-    <a class="brand" href="../"><img class="brand-mark" src="../assets/icons/nako-logo.png?v=6" width="48" height="36" alt=""><span class="brand-name">Nako</span><span class="brand-sub">taxi rank network</span></a>
+    <a class="brand" href="../"><img class="brand-mark" src="../assets/icons/nako-logo.png?v=7" width="48" height="36" alt=""><span class="brand-name">Nako</span><span class="brand-sub" data-i18n="brandSub">taxi rank network</span></a>
     <div id="gate-handheld">
-      <h1>Download the app for full access.</h1>
-      <p class="lede">This page is the introduction. Choosing a taxi, kombi, or bus, and seeing routes on the map, opens in the installed Nako app on your phone or tablet.</p>
-      <button class="find" id="install-button" type="button">Download the app</button>
+      <h1 data-i18n="gateTitle">Download the app for full access.</h1>
+      <p class="lede" data-i18n="gateLede">Choosing a taxi, kombi, or bus and seeing routes opens in the installed Nako app on your phone or tablet.</p>
+      <button class="find" id="install-button" type="button" data-i18n="downloadApp">Download the app</button>
       <div id="install-help">
-        <h2>Add it to your phone</h2>
-        <p><strong>Android:</strong> tap Download the app and confirm Install.</p>
-        <p><strong>iPhone or iPad:</strong> tap Share, then Add to Home Screen, then open the Nako icon.</p>
-        <p><a href="../">Back to the overview</a></p>
+        <h2 data-i18n="addToPhone">Add it to your phone</h2>
+        <p data-i18n="androidShort">Android: tap Download the app and confirm Install.</p>
+        <p data-i18n="iosShort">iPhone or iPad: tap Share, then Add to Home Screen, then open the Nako icon.</p>
+        <p><a href="../" data-i18n="backOverview">Back to the overview</a></p>
       </div>
     </div>
     <div id="gate-desktop" hidden>
-      <h1>Use your phone for the app.</h1>
-      <p class="lede">Nako’s route finder installs on phones and tablets only. On a laptop or desktop, this website is for information.</p>
+      <h1 data-i18n="gateDesktopTitle">Use your phone for the app.</h1>
+      <p class="lede" data-i18n="gateDesktopLede">Nako’s route finder installs on phones and tablets only. On a laptop, this site is for information.</p>
       <p class="lede">Open <strong>futurifydesigns.github.io/Nako</strong> on your phone, then download the app from there.</p>
-      <p><a class="quiet-link" href="../">Back to the overview</a></p>
+      <p><a class="quiet-link" href="../" data-i18n="backOverview">Back to the overview</a></p>
     </div>
   </main>
   <main id="app"></main>

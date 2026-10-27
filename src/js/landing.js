@@ -1,3 +1,18 @@
+import { applyLandingI18n, initLang, t, toggleLang } from "./i18n.js";
+
+initLang();
+applyLandingI18n();
+
+const langBtn = document.querySelector("#lang-toggle");
+if (langBtn) {
+  langBtn.textContent = t("otherLang");
+  langBtn.addEventListener("click", () => {
+    toggleLang();
+    applyLandingI18n();
+    langBtn.textContent = t("otherLang");
+  });
+}
+
 const nodes = [...document.querySelectorAll(".reveal")];
 
 if (!nodes.length) {

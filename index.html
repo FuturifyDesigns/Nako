@@ -6,12 +6,12 @@
   <title>Nako | Taxi rank network for Botswana</title>
   <meta name="description" content="Nako is a digital taxi-rank network for Botswana. Find kombis, taxis, and coaches from the rank. Install the app to search.">
   <meta name="theme-color" content="#75aadb">
-  <link rel="icon" href="./assets/icons/nako-logo.png?v=6" type="image/png">
+  <link rel="icon" href="./assets/icons/nako-logo.png?v=7" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Nako">
-  <link rel="stylesheet" href="./assets/css/landing.css?v=6">
+  <link rel="stylesheet" href="./assets/css/landing.css?v=7">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="landing">
@@ -21,25 +21,26 @@
       <div class="hero-bg" aria-hidden="true"></div>
       <header class="shell topbar">
         <a class="brand-lockup" href="./">
-          <img src="./assets/icons/nako-logo.png?v=6" width="64" height="48" alt="">
+          <img src="./assets/icons/nako-logo.png?v=7" width="64" height="48" alt="">
           <span class="brand-copy">
             <strong>Nako</strong>
-            <span>taxi rank network</span>
+            <span data-i18n="brandSub">taxi rank network</span>
           </span>
         </a>
+        <button class="lang-toggle" id="lang-toggle" type="button">Setswana</button>
       </header>
       <div class="shell hero-body">
         <div class="hero-layout">
           <div class="hero-mark-wrap reveal">
-            <img class="hero-mark" src="./assets/icons/nako-logo.png?v=6" width="420" height="318" alt="Nako logo: clock, taxi, and kombi on the road">
+            <img class="hero-mark" src="./assets/icons/nako-logo.png?v=7" width="420" height="318" alt="Nako logo">
           </div>
           <div class="hero-copy">
-            <p class="eyebrow reveal">Not ride-hailing</p>
-            <h1 class="reveal">Know what’s <em>coming</em>.</h1>
-            <p class="reveal">Botswana’s ranks, on your phone. Spot a corridor near you, then catch a taxi, kombi, or coach the way people already do.</p>
+            <p class="eyebrow reveal" data-i18n="eyebrow">Not ride-hailing</p>
+            <h1 class="reveal" data-i18n="heroTitle" data-i18n-html="title">Know what’s <em>coming</em>.</h1>
+            <p class="reveal" data-i18n="heroLead">Botswana’s ranks, on your phone. Spot a corridor near you, then catch a taxi, kombi, or coach the way people already do.</p>
             <div class="cta-row reveal">
-              <button class="cta" id="install-button" type="button">Download the app</button>
-              <p class="device-note" id="desktop-install-note" hidden>Use your phone or tablet to download the Nako app. This site is for reading about the network.</p>
+              <button class="cta" id="install-button" type="button" data-i18n="downloadApp">Download the app</button>
+              <p class="device-note" id="desktop-install-note" hidden data-i18n="desktopNote">Use your phone or tablet to download the Nako app. This site is for reading about the network.</p>
             </div>
           </div>
         </div>
@@ -48,85 +49,85 @@
 
     <section class="band sky" id="how">
       <div class="shell">
-        <p class="band-kicker reveal">Phase one</p>
-        <h2 class="reveal">Open the app. Pick a ride. Stand at the right rank.</h2>
-        <p class="lead reveal">This website explains the network. Searching routes happens in the phone app, so it still works when the signal drops.</p>
+        <p class="band-kicker reveal" data-i18n="phaseOne">Phase one</p>
+        <h2 class="reveal" data-i18n="howTitle">Open the app. Pick a ride. Stand at the right rank.</h2>
+        <p class="lead reveal" data-i18n="howLead">This website explains the network. Searching routes happens in the phone app, so it still works when the signal drops.</p>
         <div class="promise-grid">
           <article class="promise reveal">
             <div class="icon-chip" aria-hidden="true">1</div>
-            <strong>Taxi, kombi, or coach</strong>
-            <p>Start with the ride you want. In Gaborone you can narrow it to CBD, Broadhurst, Mogoditshane, Game City, and the rest.</p>
+            <strong data-i18n="promise1Title">Taxi, kombi, or coach</strong>
+            <p data-i18n="promise1Body">Start with the ride you want. In Gaborone you can narrow it to CBD, Broadhurst, Mogoditshane, Game City, and the rest.</p>
           </article>
           <article class="promise reveal">
             <div class="icon-chip" aria-hidden="true">2</div>
-            <strong>Your spot on the map</strong>
-            <p>Turn location on, pin the street, or type a place people actually say out loud: Riverwalk, Block 8, Station.</p>
+            <strong data-i18n="promise2Title">Your spot on the map</strong>
+            <p data-i18n="promise2Body">Turn location on, pin the street, or type a place people actually say out loud: Riverwalk, Block 8, Station.</p>
           </article>
           <article class="promise reveal">
             <div class="icon-chip" aria-hidden="true">3</div>
-            <strong>A route, not a lecture</strong>
-            <p>Nako points to a nearby corridor. Keep it, or ignore it and choose another. You’re still the one boarding.</p>
+            <strong data-i18n="promise3Title">A route, not a lecture</strong>
+            <p data-i18n="promise3Body">Nako points to a nearby corridor. Keep it, or ignore it and choose another. You’re still the one boarding.</p>
           </article>
         </div>
         <div class="truth reveal">
-          <p>Vehicles on the map are simulated for now. Trackers for drivers come later. The search already looks and feels like the live map will.</p>
+          <p data-i18n="truth">Vehicles on the map show where drivers typically wait. Live trackers for drivers come later.</p>
         </div>
       </div>
     </section>
 
     <section class="band dark" id="roadmap">
       <div class="shell">
-        <p class="band-kicker reveal">The network</p>
-        <h2 class="reveal">Built for ranks. Growing with the association.</h2>
-        <p class="lead reveal">Nine pieces of the full Nako network. Hover a card to see where each one sits.</p>
+        <p class="band-kicker reveal" data-i18n="network">The network</p>
+        <h2 class="reveal" data-i18n="roadTitle">Built for ranks. Growing with the association.</h2>
+        <p class="lead reveal" data-i18n="roadLead">Nine pieces of the full Nako network. Hover a card to see where each one sits.</p>
         <div class="roadmap-grid">
-          <article class="road-card reveal"><span class="n">1</span><h3>Auth + roles</h3><p>Passenger, driver, fleet owner, and association each get their own door.</p></article>
-          <article class="road-card reveal"><span class="n">2</span><h3>Drivers + vehicles</h3><p>Register drivers and keep vehicle details where the rank can see them.</p></article>
-          <article class="road-card reveal"><span class="n">3</span><h3>Taxi ranks</h3><p>Digitise the ranks so people know what is waiting before they walk over.</p></article>
-          <article class="road-card reveal"><span class="n">4</span><h3>Online GPS</h3><p>Live vehicle location and status once the trackers are fitted.</p></article>
-          <article class="road-card reveal"><span class="n">5</span><h3>Rank check-in</h3><p>Drivers check in and out at the rank with QR or location.</p></article>
-          <article class="road-card reveal"><span class="n">6</span><h3>Passenger discovery</h3><p>Find nearby ranks and available taxis without calling around.</p></article>
-          <article class="road-card reveal"><span class="n">7</span><h3>QR verification</h3><p>Scan a vehicle and confirm it belongs on the platform.</p></article>
-          <article class="road-card reveal"><span class="n">8</span><h3>Owner dashboard</h3><p>Fleet owners watch performance without standing at the rank all day.</p></article>
-          <article class="road-card reveal"><span class="n">9</span><h3>Association tools</h3><p>Monitor ranks, drivers, routes, and compliance from one place.</p></article>
+          <article class="road-card reveal"><span class="n">1</span><h3 data-i18n="road1">Auth + roles</h3><p data-i18n="road1Body">Passenger, driver, fleet owner, and association each get their own door.</p></article>
+          <article class="road-card reveal"><span class="n">2</span><h3 data-i18n="road2">Drivers + vehicles</h3><p data-i18n="road2Body">Register drivers and keep vehicle details where the rank can see them.</p></article>
+          <article class="road-card reveal"><span class="n">3</span><h3 data-i18n="road3">Taxi ranks</h3><p data-i18n="road3Body">Digitise the ranks so people know what is waiting before they walk over.</p></article>
+          <article class="road-card reveal"><span class="n">4</span><h3 data-i18n="road4">Online GPS</h3><p data-i18n="road4Body">Live vehicle location and status once the trackers are fitted.</p></article>
+          <article class="road-card reveal"><span class="n">5</span><h3 data-i18n="road5">Rank check-in</h3><p data-i18n="road5Body">Drivers check in and out at the rank with QR or location.</p></article>
+          <article class="road-card reveal"><span class="n">6</span><h3 data-i18n="road6">Passenger discovery</h3><p data-i18n="road6Body">Find nearby ranks and available taxis without calling around.</p></article>
+          <article class="road-card reveal"><span class="n">7</span><h3 data-i18n="road7">QR verification</h3><p data-i18n="road7Body">Scan a vehicle and confirm it belongs on the platform.</p></article>
+          <article class="road-card reveal"><span class="n">8</span><h3 data-i18n="road8">Owner dashboard</h3><p data-i18n="road8Body">Fleet owners watch performance without standing at the rank all day.</p></article>
+          <article class="road-card reveal"><span class="n">9</span><h3 data-i18n="road9">Association tools</h3><p data-i18n="road9Body">Monitor ranks, drivers, routes, and compliance from one place.</p></article>
         </div>
       </div>
     </section>
 
     <section class="band sky" id="install-help">
       <div class="shell">
-        <p class="band-kicker reveal">On your phone</p>
-        <h2 class="reveal">The finder lives on phones and tablets.</h2>
-        <p class="lead reveal">Laptops and desktops stay on this information site. Open Nako on a phone or tablet to install the app and search routes.</p>
+        <p class="band-kicker reveal" data-i18n="onPhone">On your phone</p>
+        <h2 class="reveal" data-i18n="installTitle">The finder lives on phones and tablets.</h2>
+        <p class="lead reveal" data-i18n="installLead">Laptops and desktops stay on this information site. Open Nako on a phone or tablet to install the app and search routes.</p>
         <div class="install-panel">
           <div class="install-steps reveal">
             <ol>
               <li>
                 <span class="n">1</span>
                 <div>
-                  <strong>Android phone or tablet</strong>
-                  <p>Open this site in Chrome, tap Download the app, confirm Install, then open Nako from the icon.</p>
+                  <strong data-i18n="androidTitle">Android phone or tablet</strong>
+                  <p data-i18n="androidBody">Open this site in Chrome, tap Download the app, confirm Install, then open Nako from the icon.</p>
                 </div>
               </li>
               <li>
                 <span class="n">2</span>
                 <div>
-                  <strong>iPhone or iPad</strong>
-                  <p>Tap Share, then Add to Home Screen, then open the Nako icon.</p>
+                  <strong data-i18n="iosTitle">iPhone or iPad</strong>
+                  <p data-i18n="iosBody">Tap Share, then Add to Home Screen, then open the Nako icon.</p>
                 </div>
               </li>
               <li>
                 <span class="n">3</span>
                 <div>
-                  <strong>Use it offline</strong>
-                  <p>Saved routes stay on the device. When you’re back online, Nako syncs quietly.</p>
+                  <strong data-i18n="offlineTitle">Use it offline</strong>
+                  <p data-i18n="offlineBody">Saved routes stay on the device. When you’re back online, Nako syncs quietly.</p>
                 </div>
               </li>
             </ol>
           </div>
           <aside class="install-note reveal">
-            <h3>On a computer?</h3>
-            <p>You’re in the right place to learn about Nako. Grab your phone, open this same link, and install from there when you want the route finder.</p>
+            <h3 data-i18n="computerTitle">On a computer?</h3>
+            <p data-i18n="computerBody">You’re in the right place to learn about Nako. Grab your phone, open this same link, and install from there when you want the route finder.</p>
           </aside>
         </div>
       </div>
@@ -134,8 +135,19 @@
   </main>
 
   <footer class="shell site-foot">
-    <p>© 2026 Nako. All rights reserved.</p>
-    <p>built by <a href="https://futurifydesigns.com" rel="noopener noreferrer" target="_blank">Futurify Designs</a></p>
+    <div class="site-foot-inner">
+      <div class="site-foot-brand">
+        <img src="./assets/icons/nako-logo.png?v=7" width="56" height="42" alt="">
+        <div>
+          <strong>Nako</strong>
+          <span data-i18n="brandSub">taxi rank network</span>
+        </div>
+      </div>
+      <div class="site-foot-meta">
+        <p data-i18n="copyright">© 2026 Nako. All rights reserved.</p>
+        <p><span data-i18n="builtBy">built by</span> <a href="https://futurifydesigns.com" rel="noopener noreferrer" target="_blank">Futurify Designs</a></p>
+      </div>
+    </div>
   </footer>
 
   <script src="./vendor/supabase.js"></script>

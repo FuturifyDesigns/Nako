@@ -1,8 +1,10 @@
 import { promptInstall, registerServiceWorker } from "./install.js";
+import { applyLandingI18n, initLang, t, toggleLang } from "./i18n.js";
 import { mountPassenger } from "./passenger.js";
 import { isHandheld, isStandalone } from "./session.js";
 import { startSync, track } from "./sync.js";
 
+initLang();
 registerServiceWorker("../sw.js");
 
 const handheld = isHandheld();
@@ -16,6 +18,19 @@ if (installed) {
   const desktopGate = document.querySelector("#gate-desktop");
   const button = document.querySelector("#install-button");
   const help = document.querySelector("#install-help");
+
+  applyLandingI18n(document);
+  const langBtn = document.createElement("button");
+  langBtn.type = "button";
+  langBtn.className = "lang-toggle";
+  langBtn.textContent = t("otherLang");
+  langBtn.addEventListener("click", () => {
+    toggleLang();
+    applyLandingI18n(document);
+    langBtn.textContent = t("otherLang");
+    if (button) button.textContent = t("downloadApp");
+  });
+  document.querySelector(".gate .brand")?.after(langBtn);
 
   if (!handheld) {
     if (handheldGate) handheldGate.hidden = true;

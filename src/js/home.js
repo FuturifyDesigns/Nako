@@ -1,4 +1,5 @@
 import { canPromptInstall, promptInstall, registerServiceWorker } from "./install.js";
+import { t } from "./i18n.js";
 import { isHandheld, isStandalone, platform } from "./session.js";
 import { startSync, track, trackOnce } from "./sync.js";
 
@@ -30,7 +31,7 @@ if (!handheld) {
     const outcome = await promptInstall();
     if (outcome === "accepted") {
       await track("install_accepted");
-      button.textContent = "Install confirmed";
+      button.textContent = t("downloadApp");
       return;
     }
     if (help) {
@@ -40,6 +41,6 @@ if (!handheld) {
     if (!canPromptInstall() && help) help.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   window.addEventListener("nako-install-ready", () => {
-    if (button) button.textContent = "Download the app";
+    if (button) button.textContent = t("downloadApp");
   });
 }

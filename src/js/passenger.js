@@ -542,9 +542,9 @@ export async function mountPassenger(root) {
       const length = route?.path?.reduce((sum, spotItem, index) => index ? sum + haversine(route.path[index - 1], spotItem) : 0, 0) || 0;
       map.easeTo({
         center: [spot.lng, spot.lat],
-        zoom: length > 30000 ? 14.6 : 15.8,
-        pitch: 48,
-        bearing: -18,
+        zoom: length > 30000 ? 14.4 : 15.6,
+        pitch: 28,
+        bearing: -8,
         padding: { top: 80, bottom: 360, left: 20, right: 20 },
         duration: 900
       });
@@ -601,10 +601,10 @@ export async function mountPassenger(root) {
       container: mapCanvas,
       style: "https://tiles.openfreemap.org/styles/dark",
       center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
-      zoom: 14.2,
-      pitch: 45,
-      bearing: -12,
-      maxPitch: 60,
+      zoom: 14.6,
+      pitch: 28,
+      bearing: -8,
+      maxPitch: 55,
       attributionControl: true,
       canvasContextAttributes: { antialias: true }
     });
@@ -635,10 +635,12 @@ export async function mountPassenger(root) {
           "line-opacity": 0.95
         }
       });
-      layer = createVehicleLayer(maplibregl);
-      map.addLayer(layer);
+      layer = createVehicleLayer(map, maplibregl, {
+        onSelect: (vehicle) => selectVehicle(vehicle)
+      });
       drawRoute(active, working.map((item) => item.route));
       layer.setVehicles(state.fleet);
+      layer.setSelected(state.selectedVehicle);
       focusMap(active || { path: [point || focusPoint()] });
       const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 200 : 900;
       window.setTimeout(() => {

@@ -1,97 +1,107 @@
-import * as THREE from "../../vendor/three.module.js";
-import { buildVehicle } from "./models.js";
+const ASSETS = {
+  taxi: "../assets/vehicles/taxi-mark.png",
+  kombi: "../assets/vehicles/kombi-mark.png",
+  bus: "../assets/vehicles/bus-mark.png"
+};
 
-function modelMatrix(maplibregl, vehicle) {
-  const merc = maplibregl.MercatorCoordinate.fromLngLat([vehicle.lng, vehicle.lat], 0);
-  const scale = merc.meterInMercatorCoordinateUnits() * 22;
-  const rotationX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-  const rotationY = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0, 1, 0), -THREE.MathUtils.degToRad(vehicle.bearing || 0));
-  return new THREE.Matrix4()
-    .makeTranslation(merc.x, merc.y, merc.z)
-    .scale(new THREE.Vector3(scale, -scale, scale))
-    .multiply(rotationX)
-    .multiply(rotationY);
+const SIZES = {
+  taxi: 42,
+  kombi: 48,
+  bus: 56
+};
+
+function assetFor(type) {
+  if (type === "taxi") return ASSETS.taxi;
+  if (type === "bus") return ASSETS.bus;
+  return ASSETS.kombi;
 }
 
-function disposeMesh(mesh) {
-  mesh.traverse((obj) => {
-    if (obj.geometry) obj.geometry.dispose();
-  });
+function sizeFor(type) {
+  if (type === "taxi") return SIZES.taxi;
+  if (type === "bus") return SIZES.bus;
+  return SIZES.kombi;
 }
 
-export function createVehicleLayer(maplibregl) {
-  const layer = {
-    id: "nako-vehicles",
-    type: "custom",
-    renderingMode: "3d",
-    _vehicles: [],
-    _selected: null,
-    _meshes: new Map(),
-    onAdd(map, gl) {
-      this.map = map;
-      this.camera = new THREE.Camera();
-      this.scene = new THREE.Scene();
-      const lightA = new THREE.DirectionalLight(0xffffff, 1.2);
-      lightA.position.set(40, 80, 20);
-      const lightB = new THREE.DirectionalLight(0xa8c4ff, 0.5);
-      lightB.position.set(-30, 40, -20);
-      this.scene.add(lightA, lightB, new THREE.AmbientLight(0xffffff, 0.7));
-      this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-      this.renderer.autoClear = false;
-    },
-    setVehicles(vehicles) {
-      this._vehicles = vehicles || [];
-      this.map?.triggerRepaint();
+function makeEl(vehicle, selected) {
+  const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
+  const width = sizeFor(type);
+  const wrap = document.createElement("button");
+  wrap.type = "button";
+  wrap.className = `vehicle-marker${selected ? " is-selected" : ""}`;
+  wrap.dataset.id = vehicle.id;
+  wrap.dataset.type = type;
+  wrap.setAttribute("aria-label", `${type} ${vehicle.plate || ""}`.trim());
+  wrap.style.width = `${width}px`;
+  const img = document.createElement("img");
+  img.src = `${assetFor(type)}?v=1`;
+  img.alt = "";
+  img.draggable = false;
+  img.width = width;
+  img.height = Math.round(width * 0.66);
+  wrap.append(img);
+  return wrap;
+}
+
+export function createVehicleLayer(map, maplibregl, { onSelect } = {}) {
+  const markers = new Map();
+  let selected = null;
+  let vehicles = [];
+
+  function sync() {
+    const seen = new Set();
+    vehicles.forEach((vehicle, index) => {
+      const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
+      seen.add(vehicle.id);
+      let entry = markers.get(vehicle.id);
+      if (!entry || entry.type !== type) {
+        entry?.marker.remove();
+        const el = makeEl(vehicle, vehicle.id === selected);
+        el.addEventListener("click", (event) => {
+          event.stopPropagation();
+          onSelect?.(vehicle);
+        });
+        // Fan nearby markers slightly so overlapping ranks stay readable
+        const fan = ((index % 5) - 2) * 0.000045;
+        const marker = new maplibregl.Marker({
+          element: el,
+          anchor: "center",
+          offset: [fan * 120000, ((index % 3) - 1) * 4],
+          pitchAlignment: "viewport",
+          rotationAlignment: "viewport"
+        })
+          .setLngLat([vehicle.lng + fan, vehicle.lat + fan * 0.6])
+          .addTo(map);
+        entry = { marker, el, type };
+        markers.set(vehicle.id, entry);
+      } else {
+        entry.marker.setLngLat([vehicle.lng, vehicle.lat]);
+        entry.el.classList.toggle("is-selected", vehicle.id === selected);
+      }
+    });
+    for (const [id, entry] of markers) {
+      if (!seen.has(id)) {
+        entry.marker.remove();
+        markers.delete(id);
+      }
+    }
+  }
+
+  return {
+    setVehicles(next) {
+      vehicles = next || [];
+      sync();
     },
     setSelected(id) {
-      this._selected = id;
-      this.map?.triggerRepaint();
+      selected = id;
+      for (const [vid, entry] of markers) {
+        entry.el.classList.toggle("is-selected", vid === selected);
+      }
     },
     clear() {
-      for (const [, mesh] of this._meshes) {
-        this.scene?.remove(mesh);
-        disposeMesh(mesh);
-      }
-      this._meshes.clear();
-      this._vehicles = [];
-    },
-    render(_gl, args) {
-      if (!this.renderer || !this.map) return;
-      const matrix = args?.defaultProjectionData?.mainMatrix || args;
-      if (!matrix || typeof matrix.length !== "number") return;
-      const seen = new Set();
-      this._vehicles.forEach((vehicle, index) => {
-        const type = vehicle.type === "taxi" || vehicle.type === "bus" ? vehicle.type : "kombi";
-        seen.add(vehicle.id);
-        let mesh = this._meshes.get(vehicle.id);
-        if (!mesh || mesh.userData.type !== type) {
-          if (mesh) {
-            this.scene.remove(mesh);
-            disposeMesh(mesh);
-          }
-          mesh = buildVehicle(THREE, type, index);
-          mesh.userData.type = type;
-          this.scene.add(mesh);
-          this._meshes.set(vehicle.id, mesh);
-        }
-        mesh.matrixAutoUpdate = false;
-        mesh.matrix.copy(modelMatrix(maplibregl, vehicle));
-        mesh.matrixWorldNeedsUpdate = true;
-        mesh.updateMatrixWorld(true);
-        const marker = mesh.getObjectByName("ring");
-        if (marker) marker.visible = vehicle.id === this._selected;
-      });
-      for (const [id, mesh] of this._meshes) {
-        if (!seen.has(id)) {
-          this.scene.remove(mesh);
-          disposeMesh(mesh);
-          this._meshes.delete(id);
-        }
-      }
-      this.camera.projectionMatrix.fromArray(matrix);
-      this.renderer.resetState();
-      this.renderer.render(this.scene, this.camera);
+      for (const [, entry] of markers) entry.marker.remove();
+      markers.clear();
+      vehicles = [];
+      selected = null;
     }
   };
-  return layer;
 }

@@ -1,4 +1,4 @@
-const CACHE = "nako-shell-2026-10-27-5";
+const CACHE = "nako-shell-2026-10-27-6";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -15,6 +15,7 @@ const PRECACHE = [
   "./assets/icons/nako-logo.png",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
+  "./assets/images/botswana-flag.png",
   "./assets/fonts/manrope-400.woff2",
   "./assets/fonts/manrope-600.woff2",
   "./assets/fonts/manrope-700.woff2",

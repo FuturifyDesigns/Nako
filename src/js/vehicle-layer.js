@@ -71,9 +71,9 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
         source: SOURCE_ID,
         filter: ["==", ["get", "selected"], 1],
         paint: {
-          "circle-radius": 20,
+          "circle-radius": 26,
           "circle-color": "#4ea1ff",
-          "circle-opacity": 0.22,
+          "circle-opacity": 0.2,
           "circle-stroke-width": 2,
           "circle-stroke-color": "#4ea1ff"
         }
@@ -89,10 +89,10 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
           "icon-image": ["get", "icon"],
           "icon-size": [
             "interpolate", ["linear"], ["zoom"],
-            11, 0.26,
-            14, 0.38,
-            16, 0.48,
-            18, 0.56
+            12, 0.48,
+            14, 0.62,
+            16, 0.78,
+            18, 0.9
           ],
           "icon-anchor": "center",
           "icon-allow-overlap": true,

@@ -141,7 +141,9 @@ const STRINGS = {
     addToPhone: "Add it to your phone",
     androidShort: "Android: tap Download the app and confirm Install.",
     iosShort: "iPhone or iPad: tap Share, then Add to Home Screen, then open the Nako icon.",
-    pickup: "Your spot"
+    pickup: "Your spot",
+    getDirections: "Get directions",
+    directionsHint: "Open maps for this vehicle"
   },
   tn: {
     langName: "Setswana",
@@ -282,7 +284,9 @@ const STRINGS = {
     addToPhone: "E tsenye mo fonong",
     androidShort: "Android: tobetsa Kopolola app o netefatse Install.",
     iosShort: "iPhone kgotsa iPad: tobetsa Share, Add to Home Screen, o bule icon ya Nako.",
-    pickup: "Lefelo la gago"
+    pickup: "Lefelo la gago",
+    getDirections: "Bona ditaelo",
+    directionsHint: "Bula mape bakeng sa koloi e"
   }
 };
 

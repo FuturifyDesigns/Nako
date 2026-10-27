@@ -519,6 +519,7 @@ export async function mountPassenger(root) {
     }
 
     function hideSheetForMapMove() {
+      if (mapMoving) return;
       mapMoving = true;
       window.clearTimeout(sheetHideTimer);
       setSheetHidden(true);
@@ -529,7 +530,13 @@ export async function mountPassenger(root) {
       window.clearTimeout(sheetHideTimer);
       sheetHideTimer = window.setTimeout(() => {
         if (!mapMoving && !userCollapsed) setSheetHidden(false);
-      }, 420);
+      }, 520);
+    }
+
+    function openDirections(vehicle) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}&travelmode=walking`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      track("directions_open", { city: state.place?.name, transport: state.transport, routeId: vehicle.routeId });
     }
 
     const sheetHandle = el("button", {
@@ -581,14 +588,24 @@ export async function mountPassenger(root) {
         el("h2", { text: current ? current.name : t("routesCanBeAdded") }),
         el("p", { class: "sheet-copy", text: current?.summary || t("nothingPublished") }),
         banner,
-        el("div", { class: "vehicle-list" }, state.fleet.map((vehicle) => el("button", {
-          type: "button",
-          class: `vehicle${state.selectedVehicle === vehicle.id ? " is-selected" : ""}`,
-          onclick: () => selectVehicle(vehicle)
-        }, [
-          el("strong", { text: `${labelFor(vehicle.type)} · ${vehicle.plate}` }),
-          el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}` })
-        ])))
+        el("div", { class: "vehicle-list" }, state.fleet.map((vehicle) => {
+          const selected = state.selectedVehicle === vehicle.id;
+          return el("div", { class: `vehicle-block${selected ? " is-selected" : ""}` }, [
+            el("button", {
+              type: "button",
+              class: `vehicle${selected ? " is-selected" : ""}`,
+              onclick: () => selectVehicle(vehicle)
+            }, [
+              el("strong", { text: `${labelFor(vehicle.type)} · ${vehicle.plate}` }),
+              el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}` })
+            ]),
+            selected ? el("button", {
+              type: "button",
+              class: "directions-btn",
+              onclick: () => openDirections(vehicle)
+            }, [t("getDirections")]) : null
+          ]);
+        }))
       ];
       if (working.length > 1) {
         pieces.push(el("label", { class: "sheet-switch", text: t("otherRoute") }));
@@ -606,8 +623,10 @@ export async function mountPassenger(root) {
     function selectVehicle(vehicle) {
       state.selectedVehicle = vehicle.id;
       layer?.setSelected(vehicle.id);
-      map?.easeTo({ center: [vehicle.lng, vehicle.lat], zoom: 16.2, duration: 700 });
+      map?.easeTo({ center: [vehicle.lng, vehicle.lat], zoom: 16.1, duration: 450 });
       fillSheet(activeRoute());
+      setSheetHidden(false);
+      userCollapsed = false;
     }
 
     let currentRoute = active;
@@ -672,15 +691,19 @@ export async function mountPassenger(root) {
     }
 
     function updatePickup() {
-      const pt = focusPoint();
+      // Only show for an explicit pin/GPS/typed spot — not the default town centre.
+      const explicit = state.pointSource === "gps" || state.pointSource === "pin" || state.pointSource === "typed";
+      const pt = explicit ? state.point : null;
       if (!pt) {
         pickupLabel.hidden = true;
+        pickupLabel.classList.remove("is-visible");
         return;
       }
       pickupLabel.hidden = false;
       const name = pickupLabel.querySelector(".pickup-name");
       const near = nearestLandmark(state.place?.landmarks, pt);
-      if (name) name.textContent = near?.landmark?.name || state.place.name;
+      if (name) name.textContent = near?.landmark?.name || t("pickup");
+      requestAnimationFrame(() => pickupLabel.classList.add("is-visible"));
     }
 
     function setPinMode(on) {
@@ -724,22 +747,25 @@ export async function mountPassenger(root) {
 
     map = new maplibregl.Map({
       container: mapCanvas,
-      style: "https://tiles.openfreemap.org/styles/bright",
+      style: "https://tiles.openfreemap.org/styles/positron",
       center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
       zoom: 14.4,
       pitch: 0,
       bearing: 0,
-      maxPitch: 45,
+      maxPitch: 0,
+      dragRotate: false,
+      pitchWithRotate: false,
+      renderWorldCopies: false,
       fadeDuration: 0,
       attributionControl: true,
-      canvasContextAttributes: { antialias: true }
+      canvasContextAttributes: { antialias: false }
     });
+    map.touchZoomRotate.disableRotation();
     map.on("load", () => {
       map.resize();
       map.addSource("corridors", {
         type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-        lineMetrics: true
+        data: { type: "FeatureCollection", features: [] }
       });
       map.addLayer({
         id: "corridor-halo",
@@ -751,8 +777,8 @@ export async function mountPassenger(root) {
         },
         paint: {
           "line-color": "#ffffff",
-          "line-width": 10,
-          "line-opacity": 0.95
+          "line-width": 8,
+          "line-opacity": 0.9
         }
       });
       map.addLayer({
@@ -765,7 +791,7 @@ export async function mountPassenger(root) {
         },
         paint: {
           "line-color": "#1f6feb",
-          "line-width": 4.5,
+          "line-width": 4,
           "line-opacity": 1
         }
       });
@@ -777,14 +803,11 @@ export async function mountPassenger(root) {
       layer.setSelected(state.selectedVehicle);
       focusMap(active || { path: [point || focusPoint()] });
 
-      map.on("movestart", hideSheetForMapMove);
-      map.on("zoomstart", hideSheetForMapMove);
+      // Only tuck the sheet on drag — zooming used to thrash layout every frame.
       map.on("dragstart", hideSheetForMapMove);
-      map.on("moveend", showSheetAfterMapIdle);
-      map.on("zoomend", showSheetAfterMapIdle);
       map.on("dragend", showSheetAfterMapIdle);
 
-      const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 200 : 900;
+      const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 700;
       window.setTimeout(() => {
         state.searching = false;
         searchVeil.hidden = true;

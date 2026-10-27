@@ -34,11 +34,28 @@ const STRINGS = {
     demoStep4Body: "The map shows taxis, kombis, or buses waiting along the corridor.",
     demoPause: "Pause",
     demoPlay: "Play",
+    demoAuto: "Playing",
     demoSlide1Hint: "Pick taxi, kombi, or bus",
     demoCity: "Gaborone",
     demoRecommend: "Broadhurst is closest — about 1.2 km away.",
     demoRouteName: "Broadhurst & Extension",
     demoNearby: "4 nearby",
+    processKicker: "How a trip works",
+    processTitle: "From open to board — the Nako loop.",
+    processLead: "Short process clips of what the phone does while you still catch the ride the way Botswana already does.",
+    process1Title: "Choose the ride",
+    process1Body: "Open Nako and tap taxi, kombi, or bus — the art matches what you’ll board.",
+    process2Title: "Set your place",
+    process2Body: "Pin the street or pick a suburb so search stays near you.",
+    process3Title: "Match a corridor",
+    process3Body: "Nako draws the nearby route. Keep it, or pick another from the list.",
+    process4Title: "See what’s waiting",
+    process4Body: "Vehicles show where drivers usually stand. You walk over and board yourself.",
+    process5Title: "Works when signal drops",
+    process5Body: "Routes stay on the phone. When you’re back online, Nako syncs quietly.",
+    processBoardCue: "Walk up & board",
+    processOfflineCue: "Saved routes",
+    processOfflineSub: "work without signal",
     network: "The network",
     roadTitle: "Built for ranks. Growing with the association.",
     roadLead: "Nine pieces of the full Nako network. Hover a card to see where each one sits.",
@@ -178,11 +195,28 @@ const STRINGS = {
     demoStep4Body: "Mape e bontsha ditekisi, dikhombi, kgotsa dibese tse di emeng mo tseleng.",
     demoPause: "Emisa",
     demoPlay: "Tshameka",
+    demoAuto: "E a tshameka",
     demoSlide1Hint: "Tlhopha tekisi, khombi, kgotsa bese",
     demoCity: "Gaborone",
     demoRecommend: "Broadhurst e gaufi — sekai sa 1.2 km.",
     demoRouteName: "Broadhurst & Extension",
     demoNearby: "4 di gaufi",
+    processKicker: "Ka fa loeto lo dirang ka teng",
+    processTitle: "Go tswa go bula go ya go tsena — loop ya Nako.",
+    processLead: "Diklipo tse khutshwanyane tsa se fonô e se dirang fa o santse o tsaya loeto jaaka Botswana e dira.",
+    process1Title: "Tlhopha loeto",
+    process1Body: "Bula Nako o tobe tekisi, khombi, kgotsa bese — setshwantsho se tshwana le se o tla tsena mo go sona.",
+    process2Title: "Bea lefelo la gago",
+    process2Body: "Baya pin mo mmileng kgotsa tlhopha kgaolo gore go batla go nne gaufi le wena.",
+    process3Title: "Tshwantshanya corridor",
+    process3Body: "Nako e thala tsela e e gaufi. E tsaya, kgotsa tlhopha e nngwe mo lenaaneng.",
+    process4Title: "Bona se se emeng",
+    process4Body: "Dikoloi di bontsha kwa bakgweetsi ba emang gantsi. O a ya o tsena ka bowena.",
+    process5Title: "E dira le fa neteweke e wele",
+    process5Body: "Ditsela di sala mo fonông. Fa o boela online, Nako e sync ka didimalo.",
+    processBoardCue: "Tsamaya o tsene",
+    processOfflineCue: "Ditsela tse di bolokilweng",
+    processOfflineSub: "di dira ntle le neteweke",
     network: "Neteweke",
     roadTitle: "E agilwe bakeng sa maraka. E gola le association.",
     roadLead: "Dikarolo di le robongwe tsa neteweke ya Nako. Hover card go bona maemo a nngwe le nngwe.",
@@ -296,6 +330,10 @@ export function getLang() {
   return current;
 }
 
+export function hasString(key) {
+  return Boolean((STRINGS[current] || STRINGS.en)[key] || STRINGS.en[key]);
+}
+
 export function t(key, vars = {}) {
   const table = STRINGS[current] || STRINGS.en;
   let text = table[key] ?? STRINGS.en[key] ?? key;
@@ -326,10 +364,11 @@ export function toggleLang() {
 export function applyLandingI18n(root = document) {
   root.querySelectorAll("[data-i18n]").forEach((node) => {
     const key = node.getAttribute("data-i18n");
-    if (!key) return;
+    if (!key || !hasString(key)) return;
     if (node.dataset.i18nHtml === "title") {
       const full = t(key);
-      const emWord = t(`${key}Em`);
+      const emKey = `${key}Em`;
+      const emWord = hasString(emKey) ? t(emKey) : "";
       if (emWord && full.includes(emWord)) {
         node.innerHTML = full.replace(emWord, `<em>${emWord}</em>`);
       } else {
@@ -340,6 +379,8 @@ export function applyLandingI18n(root = document) {
     node.textContent = t(key);
   });
   root.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
-    node.setAttribute("placeholder", t(node.getAttribute("data-i18n-placeholder")));
+    const key = node.getAttribute("data-i18n-placeholder");
+    if (!key || !hasString(key)) return;
+    node.setAttribute("placeholder", t(key));
   });
 }

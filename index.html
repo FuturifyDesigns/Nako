@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Nako">
-  <link rel="stylesheet" href="./assets/css/landing.css?v=9">
+  <link rel="stylesheet" href="./assets/css/landing.css?v=10">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 </head>
 <body class="landing">
@@ -102,7 +102,7 @@
             <button type="button" class="demo-nav" id="demo-prev" aria-label="Previous slide">‹</button>
             <div class="demo-dots" id="demo-dots" role="tablist" aria-label="Slides"></div>
             <button type="button" class="demo-nav" id="demo-next" aria-label="Next slide">›</button>
-            <button type="button" class="demo-play" id="demo-play" aria-pressed="true" data-i18n="demoPause">Pause</button>
+            <span class="demo-auto" aria-hidden="true" data-i18n="demoAuto">Playing</span>
           </div>
         </div>
 
@@ -208,6 +208,78 @@
       </div>
     </section>
 
+    <section class="band process-band" id="process">
+      <div class="shell">
+        <p class="band-kicker reveal" data-i18n="processKicker">How a trip works</p>
+        <h2 class="reveal" data-i18n="processTitle">From open to board — the Nako loop.</h2>
+        <p class="lead reveal" data-i18n="processLead">Short process clips of what the phone does while you still catch the ride the way Botswana already does.</p>
+        <div class="process-reel reveal is-inview" id="process-reel" aria-label="Nako process animations">
+          <article class="process-card is-active" data-process="0">
+            <div class="process-stage stage-pick" aria-hidden="true">
+              <div class="process-phone">
+                <div class="process-bar"><span></span><span></span></div>
+                <div class="process-tiles">
+                  <div class="ptile is-lit"><img src="./assets/vehicles/taxi-mark.png?v=4" alt="" width="64" height="42"><em data-i18n="taxi">Taxi</em></div>
+                  <div class="ptile"><img src="./assets/vehicles/kombi-mark.png?v=4" alt="" width="64" height="42"><em data-i18n="kombi">Kombi</em></div>
+                  <div class="ptile"><img src="./assets/vehicles/bus-mark.png?v=4" alt="" width="64" height="42"><em data-i18n="bus">Bus</em></div>
+                </div>
+                <div class="process-finger"></div>
+              </div>
+            </div>
+            <strong data-i18n="process1Title">Choose the ride</strong>
+            <p data-i18n="process1Body">Open Nako and tap taxi, kombi, or bus — the art matches what you’ll board.</p>
+          </article>
+          <article class="process-card" data-process="1">
+            <div class="process-stage stage-pin" aria-hidden="true">
+              <div class="process-map-mini">
+                <div class="process-grid"></div>
+                <div class="process-pin-drop"></div>
+                <div class="process-radar"></div>
+              </div>
+            </div>
+            <strong data-i18n="process2Title">Set your place</strong>
+            <p data-i18n="process2Body">Pin the street or pick a suburb so search stays near you.</p>
+          </article>
+          <article class="process-card" data-process="2">
+            <div class="process-stage stage-match" aria-hidden="true">
+              <div class="process-match-line"></div>
+              <div class="process-you">You</div>
+              <div class="process-rank">Rank</div>
+              <div class="process-spark"></div>
+            </div>
+            <strong data-i18n="process3Title">Match a corridor</strong>
+            <p data-i18n="process3Body">Nako draws the nearby route. Keep it, or pick another from the list.</p>
+          </article>
+          <article class="process-card" data-process="3">
+            <div class="process-stage stage-board" aria-hidden="true">
+              <div class="process-walk">
+                <span class="process-dot d1"></span>
+                <span class="process-dot d2"></span>
+                <span class="process-dot d3"></span>
+              </div>
+              <img class="process-waiting" src="./assets/vehicles/taxi-mark.png?v=4" alt="" width="96" height="64">
+              <div class="process-board-label" data-i18n="processBoardCue">Walk up &amp; board</div>
+            </div>
+            <strong data-i18n="process4Title">See what’s waiting</strong>
+            <p data-i18n="process4Body">Vehicles show where drivers usually stand. You walk over and board yourself.</p>
+          </article>
+          <article class="process-card" data-process="4">
+            <div class="process-stage stage-sync" aria-hidden="true">
+              <div class="process-phone thin">
+                <div class="process-offline">
+                  <span class="pulse-ring"></span>
+                  <strong data-i18n="processOfflineCue">Saved routes</strong>
+                  <em data-i18n="processOfflineSub">work without signal</em>
+                </div>
+              </div>
+            </div>
+            <strong data-i18n="process5Title">Works when signal drops</strong>
+            <p data-i18n="process5Body">Routes stay on the phone. When you’re back online, Nako syncs quietly.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="band dark" id="roadmap">
       <div class="shell">
         <p class="band-kicker reveal" data-i18n="network">The network</p>
@@ -287,6 +359,6 @@
   <script src="./vendor/gsap.min.js"></script>
   <script src="./vendor/ScrollTrigger.min.js"></script>
   <script type="module" src="./src/js/home.js"></script>
-  <script type="module" src="./src/js/landing.js"></script>
+  <script type="module" src="./src/js/landing.js?v=10"></script>
 </body>
 </html>

@@ -234,6 +234,9 @@ export async function mountPassenger(root) {
       });
     };
     push(state.place.name, state.place.lat, state.place.lng, "town");
+    for (const landmark of state.place.landmarks || []) {
+      push(landmark.name, landmark.lat, landmark.lng, "landmark");
+    }
     for (const zone of state.place.zones || []) {
       push(zone.name, zone.lat, zone.lng, "zone");
     }

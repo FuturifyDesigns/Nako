@@ -6,7 +6,7 @@
   <title>Find transport | Nako</title>
   <meta name="theme-color" content="#1657d6">
   <meta name="robots" content="noindex">
-  <link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/icons/nako-logo.png" type="image/png">
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="apple-touch-icon" href="../assets/icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,14 +20,22 @@
   <div class="flag-ribbon"></div>
   <main id="gate" class="gate card" style="padding:22px">
     <a class="brand" href="../"><img class="brand-mark" src="../assets/icons/nako-logo.png" width="40" height="40" alt=""><span class="brand-name">Nako</span><span class="brand-sub">taxi rank network</span></a>
-    <h1>Download the app for full access.</h1>
-    <p class="lede">This page is the introduction. Choosing a taxi, kombi, or bus, and seeing routes on the map, opens in the installed Nako app.</p>
-    <button class="find" id="install-button" type="button">Download the app</button>
-    <div id="install-help">
-      <h2>Add it to your phone</h2>
-      <p><strong>Android or Chrome:</strong> tap Download the app and confirm Install.</p>
-      <p><strong>iPhone:</strong> tap Share, then Add to Home Screen, then open the Nako icon.</p>
-      <p><a href="../">Back to the overview</a></p>
+    <div id="gate-handheld">
+      <h1>Download the app for full access.</h1>
+      <p class="lede">This page is the introduction. Choosing a taxi, kombi, or bus, and seeing routes on the map, opens in the installed Nako app on your phone or tablet.</p>
+      <button class="find" id="install-button" type="button">Download the app</button>
+      <div id="install-help">
+        <h2>Add it to your phone</h2>
+        <p><strong>Android:</strong> tap Download the app and confirm Install.</p>
+        <p><strong>iPhone or iPad:</strong> tap Share, then Add to Home Screen, then open the Nako icon.</p>
+        <p><a href="../">Back to the overview</a></p>
+      </div>
+    </div>
+    <div id="gate-desktop" hidden>
+      <h1>Use your phone for the app.</h1>
+      <p class="lede">Nako’s route finder installs on phones and tablets only. On a laptop or desktop, this website is for information.</p>
+      <p class="lede">Open <strong>futurifydesigns.github.io/Nako</strong> on your phone, then download the app from there.</p>
+      <p><a class="quiet-link" href="../">Back to the overview</a></p>
     </div>
   </main>
   <main id="app"></main>

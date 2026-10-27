@@ -19,3 +19,13 @@ export function platform() {
   if (/android/i.test(ua)) return "android";
   return "desktop";
 }
+
+/** Phones and tablets only. Laptops and desktops stay on the information site. */
+export function isHandheld() {
+  const ua = navigator.userAgent || "";
+  if (/iphone|ipod|android.+mobile/i.test(ua)) return true;
+  if (/ipad|android(?!.+mobile)|tablet|kindle|silk/i.test(ua)) return true;
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+  if (window.matchMedia("(max-width: 900px) and (pointer: coarse)").matches) return true;
+  return false;
+}

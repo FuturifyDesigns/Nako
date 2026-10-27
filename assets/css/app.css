@@ -45,7 +45,7 @@ img { max-width: 100%; }
 .site-footer p { margin: 0; }
 
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
-.brand-mark { width: 40px; height: 40px; flex: 0 0 auto; }
+.brand-mark { width: 48px; height: auto; aspect-ratio: 574 / 435; object-fit: contain; flex: 0 0 auto; }
 .brand-name { font-family: Outfit, Manrope, sans-serif; font-weight: 700; font-size: 28px; letter-spacing: -0.05em; position: relative; }
 .brand-name::after { content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--green); right: -11px; top: 4px; }
 .brand-dot { display: none; }

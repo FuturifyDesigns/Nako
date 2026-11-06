@@ -35,5 +35,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(4173, "127.0.0.1", () => {
-  console.log("Nako preview at http://127.0.0.1:4173/");
+  console.log("NakoLive preview at http://127.0.0.1:4173/");
 });

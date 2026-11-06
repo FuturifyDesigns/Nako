@@ -1,5 +1,5 @@
 /**
- * Botswana route guide for Nako phase one.
+ * Botswana route guide for NakoLive phase one.
  * Corridor shapes are wayfinding approximations, not an official survey.
  * Numbered Gaborone routes follow public descriptions from YourBotswana
  * and visitor guides (Broadhurst 1, 2 and 5, Tlokweng 4, 5 and 6,

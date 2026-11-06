@@ -58,6 +58,10 @@ export async function mountPassenger(root) {
   const routeSelect = el("select", { id: "route-select", "aria-label": "Route" });
   const routeHint = el("p", { class: "hint" });
   const locationLabel = el("p", { class: "location-label" });
+  const locationPrivacy = el("p", { class: "privacy-hint location-privacy" }, [
+    "Your current location is used to find nearby transport. ",
+    el("a", { href: "../privacy/", text: "Privacy Notice" })
+  ]);
   const recommendBox = el("div", { class: "recommend", hidden: true });
   const typeGrid = el("div", { class: "type-grid" });
   const chips = el("div", { class: "chips", id: "popular-chips" });
@@ -98,6 +102,7 @@ export async function mountPassenger(root) {
     stepLocation,
     el("div", { class: "location-actions" }, [useLocBtn, pinBtn]),
     locationLabel,
+    locationPrivacy,
     el("div", { class: "step-row" }, [stepRoute, routeKind]),
     routeSelect,
     routeHint,

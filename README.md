@@ -1,6 +1,6 @@
-# Nako
+# NakoLive
 
-Nako is a lightweight transport network: a public introduction, an installable passenger finder, a simple driver registration and location portal, and an association dashboard for approvals, routes, and anonymous usage.
+NakoLive is a lightweight transport network: a public introduction, an installable passenger finder, a simple driver registration and location portal, and an association dashboard for approvals, routes, and anonymous usage.
 
 The installed app is the full finder. Approved drivers appear only while they choose to share location. Location samples are rate-limited and passenger markers refresh in short intervals to reduce bandwidth.
 

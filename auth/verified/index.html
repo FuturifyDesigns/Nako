@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Email verified | NakoLive</title>
+  <meta name="theme-color" content="#1657d6">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../../assets/icons/nako-logo.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/css/app.css?v=17">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://zkykcxyqgaunpviwmxov.supabase.co; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
+</head>
+<body class="driver-page">
+  <div class="flag-ribbon"></div>
+  <main class="verification-wrap">
+    <section class="card driver-card verification-card" aria-live="polite">
+      <a class="brand" href="../../">
+        <img class="brand-mark" src="../../assets/icons/nako-logo.png" alt="" width="48" height="36">
+        <span class="brand-name">NakoLive</span>
+        <span class="brand-sub">Transport network</span>
+      </a>
+      <div class="verification-icon" aria-hidden="true">✓</div>
+      <p class="eyebrow">EMAIL VERIFIED</p>
+      <h1 id="verification-title">You can now log in</h1>
+      <p class="lede" id="verification-message">Your email address has been confirmed. Return to NakoLive and log in to begin your driver registration.</p>
+      <a class="find verification-action" id="login-link" href="../../driver/?mode=login&amp;verified=1">Return to driver login</a>
+    </section>
+  </main>
+  <script src="../../vendor/supabase.js"></script>
+  <script type="module" src="../../src/js/verified.js"></script>
+</body>
+</html>

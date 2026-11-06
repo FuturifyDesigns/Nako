@@ -1,4 +1,4 @@
--- Nako phase one. Idempotent schema for the free tier.
+-- NakoLive phase one. Idempotent schema for the free tier.
 -- Anonymous passengers can read active routes and record coarse usage.
 -- They cannot read usage tables or change routes.
 

@@ -53,7 +53,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
         const image = await loadImage(map, url);
         if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 2 });
       } catch (error) {
-        console.warn("Nako vehicle icon failed to load", type, error);
+        console.warn("NakoLive vehicle icon failed to load", type, error);
       }
     }
 

@@ -77,7 +77,7 @@ function brand() {
   const mark = el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png?v=6", alt: "", width: "48", height: "36" });
   return el("div", { class: "brand" }, [
     mark,
-    el("span", { class: "brand-name", text: "Nako" }),
+    el("span", { class: "brand-name", text: "NakoLive" }),
     el("span", { class: "brand-sub", text: "Transport network" })
   ]);
 }

@@ -14,7 +14,7 @@ let lastMotionState = "idle";
 function brand() {
   return el("a", { class: "brand", href: "../" }, [
     el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png", alt: "", width: "48", height: "36" }),
-    el("span", { class: "brand-name", text: "Nako" }),
+    el("span", { class: "brand-name", text: "NakoLive" }),
     el("span", { class: "brand-sub", text: "Transport network" })
   ]);
 }
@@ -37,8 +37,8 @@ async function boot() {
       brand(),
       el("p", { class: "eyebrow", text: "DRIVER REGISTRATION" }),
       el("h1", { text: "Use your phone to register" }),
-      el("p", { class: "lede", text: "Driver registration and live location sharing are designed for phones. Open this same Nako website on your phone, then tap Register as a driver." }),
-      el("a", { class: "find", href: "../", text: "Back to Nako" })
+      el("p", { class: "lede", text: "Driver registration and live location sharing are designed for phones. Open this same NakoLive website on your phone, then tap Register as a driver." }),
+      el("a", { class: "find", href: "../", text: "Back to NakoLive" })
     ]));
     return;
   }
@@ -70,7 +70,12 @@ function renderAuth() {
   ]);
   const message = el("p", { class: "form-error", hidden: true });
   const button = el("button", { class: "find", type: "submit", text: "Continue" });
-  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", password), strength, message, button]);
+  const privacyNote = el("p", { class: "privacy-hint" }, [
+    "By creating an account, you acknowledge the ",
+    el("a", { href: "../privacy/", text: "Privacy & data protection notice" }),
+    "."
+  ]);
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", password), strength, privacyNote, message, button]);
 
   function passwordScore(value) {
     if (!value) return 0;
@@ -114,7 +119,13 @@ function renderAuth() {
     button.disabled = true;
     button.textContent = mode.value === "register" ? "Creating account…" : "Signing in…";
     message.hidden = true;
-    const credentials = { email: email.value.trim(), password: password.value };
+    const credentials = mode.value === "register"
+      ? {
+          email: email.value.trim(),
+          password: password.value,
+          options: { emailRedirectTo: new URL("../auth/verified/", location.href).href }
+        }
+      : { email: email.value.trim(), password: password.value };
     const result = mode.value === "register" ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
     button.disabled = false;
     updateMode();
@@ -124,7 +135,7 @@ function renderAuth() {
       return;
     }
     if (!result.data.session) {
-      notify("Check your email to confirm your account, then sign in.");
+      notify("Check your email and open the NakoLive verification link. You will then be returned to a page where you can continue to login.");
       mode.value = "login";
       button.textContent = "Sign in";
       return;
@@ -187,7 +198,9 @@ function renderRegistration(user, existing) {
   const form = el("form", { class: "stack registration-form" }, [
     field("Driver name", fullName), field("Phone number", phone), field("Transport role", type),
     el("div", { class: "form-grid" }, [field("Car or vehicle", vehicle), field("Plate number", plate)]),
-    field("Routes handled (hold Ctrl to select more than one)", routes), message, submit
+    field("Routes handled (hold Ctrl to select more than one)", routes),
+    el("p", { class: "privacy-hint" }, ["See how we use and protect your information in our ", el("a", { href: "../privacy/", text: "Privacy Notice" }), "."]),
+    message, submit
   ]);
   for (const input of [fullName, phone, type, vehicle, plate, routes]) {
     input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
@@ -226,14 +239,31 @@ function renderRegistration(user, existing) {
 function renderApproved(user, profile) {
   const status = el("strong", { class: "share-state", text: "Location is off" });
   const detail = el("p", { class: "hint", text: "Passengers cannot see this vehicle until you turn location on." });
+  const consent = el("input", { type: "checkbox", id: "location-consent" });
+  const consentLabel = el("label", { class: "location-consent", for: "location-consent" }, [
+    consent,
+    el("span", {}, [
+      "I agree to share my precise live location with NakoLive passengers while sharing is switched on. I can switch it off at any time. ",
+      el("a", { href: "../privacy/", text: "Privacy Notice" })
+    ])
+  ]);
   const button = el("button", { type: "button", class: "find", text: "Turn location on" });
   button.addEventListener("click", () => {
-    if (watchId != null) stopSharing(true, status, detail, button); else startSharing(status, detail, button);
+    if (watchId != null) {
+      stopSharing(true, status, detail, button);
+      return;
+    }
+    if (!consent.checked) {
+      notify("Please agree to live location sharing before turning it on.", "error");
+      consent.focus();
+      return;
+    }
+    startSharing(status, detail, button);
   });
   shell("You are approved", [
-    el("div", { class: "approval-pop" }, [el("strong", { text: "You can use Nako now" }), el("p", { text: "Turn on location only while you are operating. Nako sends moving updates in short intervals and slows down while idle to reduce data use." })]),
+    el("div", { class: "approval-pop" }, [el("strong", { text: "You can use NakoLive now" }), el("p", { text: "Turn on location only while you are operating. NakoLive sends moving updates in short intervals and slows down while idle to reduce data use." })]),
     el("div", { class: "status-panel approved" }, [el("strong", { text: `${profile.transport_type.toUpperCase()} · ${profile.vehicle_description}` }), el("p", { text: profile.plate })]),
-    status, detail, button
+    status, detail, consentLabel, button
   ], user);
 }
 

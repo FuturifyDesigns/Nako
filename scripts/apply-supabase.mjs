@@ -94,13 +94,16 @@ if (already) {
   console.log(`ADMIN_PASSWORD=${password}`);
 }
 
+const confirmationTemplate = readFileSync(new URL("../supabase/templates/confirmation.html", import.meta.url), "utf8");
 const authConfig = await fetch(`https://api.supabase.com/v1/projects/${ref}/config/auth`, {
   method: "PATCH",
   headers,
   body: JSON.stringify({
     disable_signup: false,
-    site_url: "https://futurifydesigns.github.io/Nako/",
-    uri_allow_list: "https://futurifydesigns.github.io/Nako/**,https://futurifydesigns.github.io/Nako/driver/**"
+    site_url: "https://nakolive.co.bw/",
+    uri_allow_list: "https://nakolive.co.bw/**,https://www.nakolive.co.bw/**,https://futurifydesigns.github.io/Nako/**",
+    mailer_subjects_confirmation: "Verify your NakoLive driver account",
+    mailer_templates_confirmation_content: confirmationTemplate
   })
 });
 console.log(`auth config ${authConfig.status}`);

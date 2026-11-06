@@ -16,7 +16,7 @@ export function loadGoogleMaps() {
       resolve(globalThis.google.maps);
     };
     const script = document.createElement("script");
-    const params = new URLSearchParams({ key: config.googleMapsApiKey, loading: "async", callback, libraries: "marker", v: "weekly" });
+    const params = new URLSearchParams({ key: config.googleMapsApiKey, loading: "async", callback, v: "quarterly" });
     script.src = `https://maps.googleapis.com/maps/api/js?${params}`;
     script.async = true;
     script.onerror = () => {
@@ -32,10 +32,14 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
   const maps = await loadGoogleMaps();
   const native = new maps.Map(container, {
     center: { lat: center.lat, lng: center.lng }, zoom,
-    mapId: config.googleMapsMapId || undefined,
-    // Vector maps can be slow or remain grey on some mobile GPUs. Raster keeps
-    // the Google basemap lightweight while retaining the configured map ID.
+    // Use Google's lightweight raster roadmap on mobile. The cloud map ID was
+    // configured as vector and caused expensive WebGL zoom rendering.
     renderingType: maps.RenderingType?.RASTER || "RASTER",
+    mapTypeId: "roadmap",
+    isFractionalZoomEnabled: false,
+    minZoom: 10,
+    maxZoom: 18,
+    backgroundColor: "#e8edf2",
     disableDefaultUI: true, zoomControl: true, gestureHandling: "greedy",
     clickableIcons: false, streetViewControl: false, mapTypeControl: false,
     fullscreenControl: false
@@ -104,16 +108,4 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
     setSelected(id) { selected = id; sync(latest); },
     clear() { for (const marker of markers.values()) marker.setMap(null); markers.clear(); }
   };
-}
-
-export function addGooglePlaceMarkers(mapAdapter, featureCollection) {
-  for (const feature of featureCollection?.features || []) {
-    new globalThis.google.maps.Marker({
-      map: mapAdapter.native,
-      position: { lat: feature.geometry.coordinates[1], lng: feature.geometry.coordinates[0] },
-      title: feature.properties.name,
-      clickable: false,
-      icon: { path: globalThis.google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: "#1f6feb", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 }
-    });
-  }
 }

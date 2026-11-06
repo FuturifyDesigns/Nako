@@ -4,22 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Find transport | NakoLive</title>
-  <meta name="theme-color" content="#1657d6">
+  <meta name="theme-color" content="#0b4fc5">
   <meta name="robots" content="noindex">
-  <link rel="icon" href="../assets/icons/nako-logo.png?v=5" type="image/png">
+  <link rel="icon" href="../assets/icons/favicon.png" sizes="96x96" type="image/png">
   <link rel="manifest" href="../manifest.webmanifest">
-  <link rel="apple-touch-icon" href="../assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png?v=10" sizes="180x180">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="NakoLive">
   <link rel="stylesheet" href="../vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="../assets/css/app.css?v=16">
+  <link rel="stylesheet" href="../assets/css/app.css?v=19">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://*.googleusercontent.com blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com https://zkykcxyqgaunpviwmxov.supabase.co wss://zkykcxyqgaunpviwmxov.supabase.co https://nominatim.openstreetmap.org; frame-src https://*.google.com; worker-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
   <script src="../src/js/mode.js"></script>
 </head>
 <body>
+  <div class="pwa-splash" id="pwa-splash" role="status" aria-label="Opening NakoLive">
+    <div class="pwa-splash-glow" aria-hidden="true"></div>
+    <img src="../assets/icons/nako-logo.png?v=10" width="300" height="227" alt="">
+    <strong>NakoLive</strong>
+    <span>Transport network</span>
+    <div class="pwa-splash-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
   <div class="flag-ribbon"></div>
   <main id="gate" class="gate card" style="padding:22px">
-    <a class="brand" href="../"><img class="brand-mark" src="../assets/icons/nako-logo.png?v=7" width="48" height="36" alt=""><span class="brand-name">NakoLive</span><span class="brand-sub" data-i18n="brandSub">Transport network</span></a>
+    <a class="brand" href="../"><img class="brand-mark" src="../assets/icons/nako-logo.png?v=10" width="48" height="36" alt=""><span class="brand-name">NakoLive</span><span class="brand-sub" data-i18n="brandSub">Transport network</span></a>
     <div id="gate-handheld">
       <h1 data-i18n="gateTitle">Download the app for full access.</h1>
       <p class="lede" data-i18n="gateLede">Choosing a taxi, kombi, or bus and seeing routes opens in the installed NakoLive app on your phone or tablet.</p>
@@ -41,6 +48,6 @@
   <main id="app"></main>
   <script src="../vendor/maplibre-gl.js"></script>
   <script src="../vendor/supabase.js"></script>
-  <script type="module" src="../src/js/app-boot.js?v=18"></script>
+  <script type="module" src="../src/js/app-boot.js?v=19"></script>
 </body>
 </html>

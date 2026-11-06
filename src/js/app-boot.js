@@ -9,6 +9,23 @@ registerServiceWorker("../sw.js");
 
 const handheld = isHandheld();
 const installed = isStandalone() || document.documentElement.dataset.mode === "app";
+const splash = document.querySelector("#pwa-splash");
+
+if (splash && installed) {
+  let dismissed = false;
+  const dismissSplash = () => {
+    if (dismissed) return;
+    dismissed = true;
+    splash.classList.add("is-leaving");
+    window.setTimeout(() => splash.remove(), 420);
+  };
+  const scheduleDismiss = () => window.setTimeout(dismissSplash, 900);
+  if (document.readyState === "complete") scheduleDismiss();
+  else window.addEventListener("load", scheduleDismiss, { once: true });
+  window.setTimeout(dismissSplash, 3500);
+} else {
+  splash?.remove();
+}
 
 if (installed) {
   mountPassenger(document.querySelector("#app"));

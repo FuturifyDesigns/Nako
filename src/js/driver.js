@@ -13,7 +13,7 @@ let lastMotionState = "idle";
 
 function brand() {
   return el("a", { class: "brand", href: "../" }, [
-    el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png", alt: "", width: "48", height: "36" }),
+    el("img", { class: "brand-mark", src: "../assets/icons/nako-logo.png?v=10", alt: "", width: "48", height: "36" }),
     el("span", { class: "brand-name", text: "NakoLive" }),
     el("span", { class: "brand-sub", text: "Transport network" })
   ]);

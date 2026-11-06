@@ -1,4 +1,4 @@
-const CACHE = "nakolive-shell-2026-11-06-25";
+const CACHE = "nakolive-shell-2026-11-06-26";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -17,12 +17,16 @@ const PRECACHE = [
   "./assets/css/app.css",
   "./assets/css/landing.css",
   "./assets/icons/favicon.svg",
+  "./assets/icons/favicon.png",
   "./assets/icons/nako-mark.svg",
   "./assets/icons/nako-logo.png",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
+  "./assets/icons/icon-maskable-512.png",
+  "./assets/icons/apple-touch-icon.png",
   "./assets/images/botswana-flag.png",
   "./assets/images/driver-registration-bg.webp",
+  "./assets/images/nakolive-social.png",
   "./assets/vehicles/taxi-mark.png",
   "./assets/vehicles/kombi-mark.png",
   "./assets/vehicles/bus-mark.png",

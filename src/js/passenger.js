@@ -41,7 +41,8 @@ export async function mountPassenger(root) {
     selectedVehicle: null,
     followHint: true,
     hideRecommend: false,
-    locationKey: ""
+    locationKey: "",
+    recommendationAnchor: null
   };
   let recommendationVersion = 0;
 
@@ -368,8 +369,11 @@ export async function mountPassenger(root) {
 
   async function updateRecommendation() {
     const version = ++recommendationVersion;
-    clear(recommendBox);
-    if (state.hideRecommend) {
+    // Route recommendations are meaningful only when the passenger explicitly
+    // shares their current GPS position. Town centres and dropped pins should
+    // not trigger a recommendation.
+    if (state.pointSource !== "gps" || !state.point || state.hideRecommend) {
+      clear(recommendBox);
       recommendBox.hidden = true;
       return;
     }
@@ -386,14 +390,14 @@ export async function mountPassenger(root) {
     ranked.sort((a, b) => (activeCounts.get(b.route.id) || 0) - (activeCounts.get(a.route.id) || 0) || (a.distance || Infinity) - (b.distance || Infinity));
     const best = ranked[0];
     const available = activeCounts.get(best.route.id) || 0;
-    recommendBox.hidden = false;
-    recommendBox.append(
+    recommendBox.replaceChildren(
       el("p", { text: available ? `${best.route.name} is the best match with ${available} active vehicle${available === 1 ? "" : "s"} nearby.` : t("closestRoute", { name: best.route.name, distance: formatDistance(best.distance) }) }),
       el("div", { class: "recommend-actions" }, [
         el("button", { type: "button", class: "text-button", onclick: () => acceptRecommendation(best.route.id) }, [t("useRoute")]),
         el("button", { type: "button", class: "text-button muted", onclick: () => skipRecommendation() }, [t("illDecide")])
       ])
     );
+    recommendBox.hidden = false;
   }
 
   function acceptRecommendation(id) {
@@ -421,8 +425,15 @@ export async function mountPassenger(root) {
 
   function noteLocationChange(point, source) {
     const key = locationFingerprint(point, source);
-    if (key !== state.locationKey) {
-      state.locationKey = key;
+    state.locationKey = key;
+    if (source !== "gps" || !point) {
+      state.recommendationAnchor = null;
+      state.hideRecommend = true;
+      return;
+    }
+    // Ignore ordinary GPS drift. Re-offer only after a real location change.
+    if (!state.recommendationAnchor || haversine(state.recommendationAnchor, point) >= 250) {
+      state.recommendationAnchor = { lat: point.lat, lng: point.lng };
       state.hideRecommend = false;
     }
   }
@@ -621,10 +632,18 @@ export async function mountPassenger(root) {
       clear(sheetBody);
       const best = working[0];
       const offer = best && current && best.route.id !== current.id;
-      const banner = offer ? el("div", { class: "recommend in-sheet" }, [
+      const banner = offer && state.pointSource === "gps" && !state.hideRecommend ? el("div", { class: "recommend in-sheet" }, [
         el("p", { text: t("closerOption", { name: best.route.name, distance: formatDistance(best.distance) }) }),
-        el("button", { type: "button", class: "text-button", onclick: () => switchRoute(best.route) }, [t("useRecommended")]),
-        el("button", { type: "button", class: "text-button muted", onclick: () => { banner.remove(); track("recommendation_skip", { city: state.place.name, transport: state.transport, routeId: current.id }); } }, [t("keepChoice")])
+        el("button", { type: "button", class: "text-button", onclick: () => {
+          state.hideRecommend = true;
+          switchRoute(best.route);
+          track("recommendation_accept", { city: state.place.name, transport: state.transport, routeId: best.route.id });
+        } }, [t("useRecommended")]),
+        el("button", { type: "button", class: "text-button muted", onclick: () => {
+          state.hideRecommend = true;
+          banner.remove();
+          track("recommendation_skip", { city: state.place.name, transport: state.transport, routeId: current.id });
+        } }, [t("keepChoice")])
       ]) : null;
       const pieces = [
         el("p", {
@@ -770,6 +789,83 @@ export async function mountPassenger(root) {
     updatePickup();
     startFleetWatch();
 
+    function startFallbackMap() {
+      if (!globalThis.maplibregl) {
+        searchVeil.hidden = true;
+        state.searching = false;
+        sheet.prepend(el("p", { class: "hint", text: "Map unavailable." }));
+        return;
+      }
+
+      map = new maplibregl.Map({
+        container: mapCanvas,
+        style: "https://tiles.openfreemap.org/styles/liberty",
+        center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
+        zoom: 13.6,
+        pitch: 0,
+        bearing: 0,
+        maxPitch: 0,
+        dragRotate: false,
+        pitchWithRotate: false,
+        renderWorldCopies: false,
+        fadeDuration: 0,
+        attributionControl: true,
+        canvasContextAttributes: { antialias: false }
+      });
+      map.touchZoomRotate.disableRotation();
+      map.on("load", () => {
+        map.resize();
+        bumpPlaceLabels(map);
+        map.addSource("nako-places", {
+          type: "geojson",
+          data: placesGeoJSON()
+        });
+        map.addLayer({
+          id: "nako-places-dot",
+          type: "circle",
+          source: "nako-places",
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3, 15, 5.5],
+            "circle-color": "#1f6feb",
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#ffffff"
+          }
+        });
+        map.addLayer({
+          id: "nako-places-label",
+          type: "symbol",
+          source: "nako-places",
+          layout: {
+            "text-field": ["get", "name"],
+            "text-font": ["Noto Sans Regular"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 15, 13],
+            "text-offset": [0, 1.05],
+            "text-anchor": "top",
+            "text-optional": true,
+            "text-padding": 2
+          },
+          paint: {
+            "text-color": "#122033",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.4
+          }
+        });
+        layer = createVehicleLayer(map, maplibregl, {
+          onSelect: (vehicle) => selectVehicle(vehicle)
+        });
+        layer.setVehicles(state.fleet);
+        layer.setSelected(state.selectedVehicle);
+        focusMap(active || { path: [point || focusPoint()] });
+        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;
+        window.setTimeout(() => {
+          state.searching = false;
+          searchVeil.hidden = true;
+          if (pinFirst) setPinMode(true);
+        }, delay);
+      });
+      map.on("error", (event) => console.warn("Fallback map tile error", event?.error || event));
+    }
+
     if (googleMapsConfigured()) {
       const center = point || focusPoint();
       createGoogleMap(mapCanvas, { center, zoom: 14 }).then((googleMap) => {
@@ -787,87 +883,12 @@ export async function mountPassenger(root) {
         }, delay);
       }).catch((error) => {
         console.warn(error);
-        searchVeil.hidden = true;
-        sheet.prepend(el("p", { class: "hint", text: "Google Maps is unavailable. Driver details are still updating." }));
+        mapCanvas.replaceChildren();
+        startFallbackMap();
       });
       return;
     }
-
-    if (!globalThis.maplibregl) {
-      searchVeil.hidden = true;
-      state.searching = false;
-      sheet.prepend(el("p", { class: "hint", text: "Map unavailable." }));
-      return;
-    }
-
-    map = new maplibregl.Map({
-      container: mapCanvas,
-      style: "https://tiles.openfreemap.org/styles/liberty",
-      center: [(point || focusPoint()).lng, (point || focusPoint()).lat],
-      zoom: 13.6,
-      pitch: 0,
-      bearing: 0,
-      maxPitch: 0,
-      dragRotate: false,
-      pitchWithRotate: false,
-      renderWorldCopies: false,
-      fadeDuration: 0,
-      attributionControl: true,
-      canvasContextAttributes: { antialias: false }
-    });
-    map.touchZoomRotate.disableRotation();
-    map.on("load", () => {
-      map.resize();
-      bumpPlaceLabels(map);
-      map.addSource("nako-places", {
-        type: "geojson",
-        data: placesGeoJSON()
-      });
-      map.addLayer({
-        id: "nako-places-dot",
-        type: "circle",
-        source: "nako-places",
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3, 15, 5.5],
-          "circle-color": "#1f6feb",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff"
-        }
-      });
-      map.addLayer({
-        id: "nako-places-label",
-        type: "symbol",
-        source: "nako-places",
-        layout: {
-          "text-field": ["get", "name"],
-          "text-font": ["Noto Sans Regular"],
-          "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 15, 13],
-          "text-offset": [0, 1.05],
-          "text-anchor": "top",
-          "text-optional": true,
-          "text-padding": 2
-        },
-        paint: {
-          "text-color": "#122033",
-          "text-halo-color": "#ffffff",
-          "text-halo-width": 1.4
-        }
-      });
-      layer = createVehicleLayer(map, maplibregl, {
-        onSelect: (vehicle) => selectVehicle(vehicle)
-      });
-      layer.setVehicles(state.fleet);
-      layer.setSelected(state.selectedVehicle);
-      focusMap(active || { path: [point || focusPoint()] });
-
-
-      const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 700;
-      window.setTimeout(() => {
-        state.searching = false;
-        searchVeil.hidden = true;
-        if (pinFirst) setPinMode(true);
-      }, delay);
-    });
+    startFallbackMap();
   }
 
   window.addEventListener("popstate", () => {

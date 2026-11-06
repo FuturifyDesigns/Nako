@@ -19,7 +19,10 @@ export function loadGoogleMaps() {
     const params = new URLSearchParams({ key: config.googleMapsApiKey, loading: "async", callback, libraries: "marker", v: "weekly" });
     script.src = `https://maps.googleapis.com/maps/api/js?${params}`;
     script.async = true;
-    script.onerror = () => reject(new Error("Google Maps could not load"));
+    script.onerror = () => {
+      loading = null;
+      reject(new Error("Google Maps could not load"));
+    };
     document.head.append(script);
   });
   return loading;
@@ -30,9 +33,23 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
   const native = new maps.Map(container, {
     center: { lat: center.lat, lng: center.lng }, zoom,
     mapId: config.googleMapsMapId || undefined,
+    // Vector maps can be slow or remain grey on some mobile GPUs. Raster keeps
+    // the Google basemap lightweight while retaining the configured map ID.
+    renderingType: maps.RenderingType?.RASTER || "RASTER",
     disableDefaultUI: true, zoomControl: true, gestureHandling: "greedy",
     clickableIcons: false, streetViewControl: false, mapTypeControl: false,
     fullscreenControl: false
+  });
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      callback();
+    };
+    maps.event.addListenerOnce(native, "tilesloaded", () => finish(resolve));
+    const timer = window.setTimeout(() => finish(() => reject(new Error("Google Maps tiles timed out"))), 7000);
   });
   return {
     native,

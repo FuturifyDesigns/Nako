@@ -342,6 +342,30 @@ create table if not exists public.driver_profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Upgrade early driver-profile drafts that used separate make/model/colour fields.
+alter table public.driver_profiles add column if not exists vehicle_description text;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'driver_profiles' and column_name = 'vehicle_make'
+  ) then
+    execute 'update public.driver_profiles set vehicle_description = trim(concat_ws('' '', vehicle_color, vehicle_make, vehicle_model)) where vehicle_description is null';
+  end if;
+end $$;
+update public.driver_profiles set vehicle_description = 'Vehicle details pending' where vehicle_description is null;
+alter table public.driver_profiles alter column vehicle_description set not null;
+alter table public.driver_profiles drop column if exists vehicle_make;
+alter table public.driver_profiles drop column if exists vehicle_model;
+alter table public.driver_profiles drop column if exists vehicle_color;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'driver_profiles_vehicle_description_check') then
+    alter table public.driver_profiles add constraint driver_profiles_vehicle_description_check
+      check (char_length(vehicle_description) between 2 and 120);
+  end if;
+end $$;
+
 create unique index if not exists driver_profiles_plate_idx on public.driver_profiles (upper(plate));
 create index if not exists driver_profiles_queue_idx on public.driver_profiles (transport_type, status, created_at desc);
 

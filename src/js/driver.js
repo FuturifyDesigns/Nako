@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { clear, el } from "./dom.js";
+import { isHandheld } from "./session.js";
 import { currentCatalog, startSync, supabaseClient } from "./sync.js";
 
 const root = document.querySelector("#driver");
@@ -31,6 +32,16 @@ async function profileFor(userId) {
 }
 
 async function boot() {
+  if (!isHandheld()) {
+    root.append(el("section", { class: "card admin-card driver-card driver-desktop-note" }, [
+      brand(),
+      el("p", { class: "eyebrow", text: "DRIVER REGISTRATION" }),
+      el("h1", { text: "Use your phone to register" }),
+      el("p", { class: "lede", text: "Driver registration and live location sharing are designed for phones. Open this same Nako website on your phone, then tap Register as a driver." }),
+      el("a", { class: "find", href: "../", text: "Back to Nako" })
+    ]));
+    return;
+  }
   if (!db) {
     root.append(el("section", { class: "card admin-card" }, [brand(), el("h1", { text: "Driver access" }), el("p", { text: "Driver access is not configured on this build." })]));
     return;
@@ -42,26 +53,71 @@ async function boot() {
 
 function renderAuth() {
   clear(root);
+  const field = (label, input) => el("label", { class: "field-label auth-field" }, [el("span", { text: label }), input]);
   const mode = el("select", { "aria-label": "Account action" }, [
     el("option", { value: "login", text: "Sign in" }),
     el("option", { value: "register", text: "Create driver account" })
   ]);
-  const email = el("input", { type: "email", required: "true", autocomplete: "email", placeholder: "Email address" });
-  const password = el("input", { type: "password", required: "true", minlength: "8", autocomplete: "current-password", placeholder: "Password" });
+  mode.value = new URLSearchParams(location.search).get("mode") === "register" ? "register" : "login";
+  const email = el("input", { type: "email", required: "true", autocomplete: "email", placeholder: "driver@example.com", maxlength: "160" });
+  const password = el("input", { type: "password", required: "true", minlength: "8", autocomplete: "current-password", placeholder: "Enter your password" });
+  const strengthBars = el("div", { class: "strength-bars", "aria-hidden": "true" }, [0, 1, 2, 3, 4].map(() => el("span")));
+  const strengthText = el("strong", { text: "Password strength" });
+  const strength = el("div", { class: "password-strength", hidden: true, role: "status" }, [
+    el("div", { class: "strength-row" }, [strengthText, el("span", { class: "strength-label", text: "" })]),
+    strengthBars,
+    el("small", { text: "Use 10+ characters with uppercase, lowercase, a number and a symbol." })
+  ]);
   const message = el("p", { class: "form-error", hidden: true });
   const button = el("button", { class: "find", type: "submit", text: "Continue" });
-  const form = el("form", { class: "stack" }, [mode, email, password, message, button]);
-  mode.addEventListener("change", () => {
-    button.textContent = mode.value === "register" ? "Create account" : "Sign in";
-    password.autocomplete = mode.value === "register" ? "new-password" : "current-password";
-  });
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", password), strength, message, button]);
+
+  function passwordScore(value) {
+    if (!value) return 0;
+    return [value.length >= 10, /[a-z]/.test(value) && /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value), value.length >= 14].filter(Boolean).length;
+  }
+
+  function updateStrength() {
+    const registering = mode.value === "register";
+    const score = passwordScore(password.value);
+    strength.hidden = !registering || !password.value;
+    strength.dataset.score = String(score);
+    const labels = ["Very weak", "Weak", "Fair", "Good", "Strong", "Very strong"];
+    strength.querySelector(".strength-label").textContent = labels[score];
+    password.setCustomValidity(registering && password.value && score < 4 ? "Use at least 10 characters with uppercase, lowercase, a number and a symbol." : "");
+  }
+
+  function updateMode() {
+    const registering = mode.value === "register";
+    button.textContent = registering ? "Create driver account" : "Sign in securely";
+    password.autocomplete = registering ? "new-password" : "current-password";
+    password.minLength = registering ? 10 : 8;
+    password.placeholder = registering ? "Create a strong password" : "Enter your password";
+    updateStrength();
+  }
+
+  mode.addEventListener("change", updateMode);
+  password.addEventListener("input", updateStrength);
+  for (const input of [email, password]) {
+    input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
+    input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
+  }
+  updateMode();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    updateStrength();
+    if (!form.reportValidity()) {
+      message.textContent = "Please correct the highlighted fields before continuing.";
+      message.hidden = false;
+      return;
+    }
     button.disabled = true;
+    button.textContent = mode.value === "register" ? "Creating account…" : "Signing in…";
     message.hidden = true;
     const credentials = { email: email.value.trim(), password: password.value };
     const result = mode.value === "register" ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
     button.disabled = false;
+    updateMode();
     if (result.error) {
       message.textContent = result.error.message;
       message.hidden = false;
@@ -113,12 +169,12 @@ function renderPending(user, profile) {
 function renderRegistration(user, existing) {
   const catalog = currentCatalog();
   const field = (label, input) => el("label", { class: "field-label" }, [el("span", { text: label }), input]);
-  const fullName = el("input", { required: "true", value: existing?.full_name || "", autocomplete: "name" });
-  const phone = el("input", { required: "true", value: existing?.phone || "", type: "tel", autocomplete: "tel" });
+  const fullName = el("input", { required: "true", minlength: "2", maxlength: "100", value: existing?.full_name || "", autocomplete: "name", placeholder: "Your full name" });
+  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || "", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
   const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: value[0].toUpperCase() + value.slice(1), selected: existing?.transport_type === value ? "selected" : null })));
-  const vehicle = el("input", { required: "true", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
-  const plate = el("input", { required: "true", value: existing?.plate || "", autocapitalize: "characters" });
-  const routes = el("select", { multiple: "true", size: "7", "aria-label": "Routes" });
+  const vehicle = el("input", { required: "true", minlength: "2", maxlength: "120", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
+  const plate = el("input", { required: "true", minlength: "2", maxlength: "30", pattern: "[A-Za-z0-9 -]{2,30}", value: existing?.plate || "", autocapitalize: "characters", placeholder: "B 123 ABC" });
+  const routes = el("select", { multiple: "true", required: "true", size: "7", "aria-label": "Routes" });
   function fillRoutes() {
     clear(routes);
     const options = catalog.places.flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name }))).filter((route) => route.transport_type === type.value);
@@ -133,9 +189,20 @@ function renderRegistration(user, existing) {
     el("div", { class: "form-grid" }, [field("Car or vehicle", vehicle), field("Plate number", plate)]),
     field("Routes handled (hold Ctrl to select more than one)", routes), message, submit
   ]);
+  for (const input of [fullName, phone, type, vehicle, plate, routes]) {
+    input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
+    input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
+    input.addEventListener("change", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
+  }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!form.reportValidity()) {
+      message.textContent = "Please complete every required field and select at least one route.";
+      message.hidden = false;
+      return;
+    }
     submit.disabled = true;
+    submit.textContent = "Sending application…";
     message.hidden = true;
     const row = {
       user_id: user.id, full_name: fullName.value.trim(), phone: phone.value.trim(), transport_type: type.value,
@@ -145,6 +212,7 @@ function renderRegistration(user, existing) {
     };
     const { error } = await db.from("driver_profiles").upsert(row);
     submit.disabled = false;
+    submit.textContent = existing ? "Send corrected application" : "Send for verification";
     if (error) { message.textContent = error.message; message.hidden = false; return; }
     notify("Application sent for verification.");
     renderDriver(user);

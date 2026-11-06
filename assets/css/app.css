@@ -32,6 +32,12 @@ body {
   background: #f4f7fb;
   min-height: 100vh;
 }
+body.driver-page {
+  background:
+    linear-gradient(180deg, rgba(5,39,79,.76), rgba(8,47,91,.45) 48%, rgba(5,25,49,.72)),
+    url("../images/driver-registration-bg.webp") center bottom / cover fixed no-repeat;
+}
+body.driver-page #driver { min-height: calc(100vh - 8px); display: grid; justify-items: center; align-content: start; padding: 14px 0 32px; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button, a, .type-card, .zone-card, .chip, .vehicle, .tool, .back, .ghost, .find, .suggestion {
   -webkit-tap-highlight-color: transparent;
@@ -456,11 +462,30 @@ html[data-mode="gate"] #app { display: none; }
 .gate { width: min(520px, calc(100% - 28px)); margin: 28px auto; }
 
 .zone-block select { width: 100%; min-height: 50px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); padding: 10px 12px; }
-.driver-card { width: min(680px, calc(100% - 28px)); }
+.driver-card { width: min(680px, calc(100% - 28px)); background: rgba(255,255,255,.96); border-color: rgba(255,255,255,.78); box-shadow: 0 24px 70px rgba(3,28,60,.28); backdrop-filter: blur(10px); }
+.driver-card h1 { font-size: clamp(30px, 6vw, 46px); margin-top: 18px; }
+.driver-card .brand { width: fit-content; }
+.driver-desktop-note { text-align: center; margin-top: 9vh; }
+.driver-desktop-note .brand { margin-inline: auto; }
+.driver-desktop-note .find { text-decoration: none; }
 .field-label { display: grid; gap: 6px; font-weight: 750; color: var(--ink); }
 .field-label > span { font-size: 13px; color: var(--muted); }
+.field-label input[aria-invalid="true"], .field-label select[aria-invalid="true"] { border-color: #c92f4b; box-shadow: 0 0 0 3px rgba(201,47,75,.1); }
+.field-label input:valid:not(:placeholder-shown) { border-color: #74bd8d; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .registration-form select[multiple] { min-height: 180px; }
+.auth-form { margin-top: 16px; }
+.password-strength { display: grid; gap: 7px; padding: 10px 12px; border-radius: 14px; background: #f4f7fb; border: 1px solid var(--line); }
+.strength-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 12px; }
+.strength-label { color: var(--muted); font-weight: 800; }
+.strength-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.strength-bars span { height: 5px; border-radius: 99px; background: #d9e2ec; }
+.password-strength[data-score="1"] .strength-bars span:nth-child(-n+1),
+.password-strength[data-score="2"] .strength-bars span:nth-child(-n+2) { background: #dc4a4a; }
+.password-strength[data-score="3"] .strength-bars span:nth-child(-n+3) { background: #d79a16; }
+.password-strength[data-score="4"] .strength-bars span:nth-child(-n+4),
+.password-strength[data-score="5"] .strength-bars span:nth-child(-n+5) { background: #1f9d55; }
+.password-strength small { color: var(--muted); line-height: 1.4; }
 .status-panel, .approval-pop { padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: #f7f9fc; }
 .status-panel p, .approval-pop p { margin: 5px 0 0; color: var(--muted); }
 .status-panel.approved, .approval-pop { border-color: #9ed7b0; background: #f0fbf4; }
@@ -492,6 +517,9 @@ html[data-mode="gate"] #app { display: none; }
   .admin-side { border-right: 0; border-bottom: 1px solid var(--line); }
   .phone-mock { display: none; }
   .form-grid { grid-template-columns: 1fr; }
+  body.driver-page { background-position: center bottom; background-attachment: scroll; }
+  body.driver-page #driver { padding-top: 8px; }
+  .driver-card { margin: 8px auto 150px; padding: 18px; border-radius: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .radar { animation: none; }

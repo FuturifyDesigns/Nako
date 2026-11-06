@@ -589,13 +589,26 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 .site-foot-inner {
   display: grid;
-  gap: 18px;
-  padding: 28px 24px;
+  gap: 26px;
+  padding: 32px;
   border-radius: 28px;
   background:
     linear-gradient(180deg, #f7fbff 0%, #eef5fb 100%);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+}
+.site-foot-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.25fr) minmax(160px, .75fr) minmax(300px, 1.35fr) minmax(180px, .8fr);
+  gap: 28px;
+  align-items: start;
+}
+.site-foot-brand-block > p {
+  max-width: 310px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
 }
 .site-foot-brand {
   display: flex;
@@ -603,7 +616,7 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   gap: 14px;
 }
 .site-foot-brand img {
-  width: 56px;
+  width: 72px;
   height: auto;
   aspect-ratio: 574 / 435;
   object-fit: contain;
@@ -611,7 +624,7 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 .site-foot-brand strong {
   display: block;
   font-family: var(--display);
-  font-size: 22px;
+  font-size: 25px;
   letter-spacing: -0.04em;
 }
 .site-foot-brand span {
@@ -621,27 +634,39 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
   font-weight: 700;
   margin-top: 2px;
 }
-.site-foot-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-weight: 800;
-  font-size: 14px;
+.site-foot-column { display: grid; gap: 13px; align-content: start; }
+.site-foot-column h2 {
+  margin: 0 0 2px;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
-.site-foot-meta p { margin: 0; }
-.site-foot-contact, .site-foot-legal { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-.site-foot-contact { width: 100%; }
-.site-foot-legal { width: 100%; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--line); }
-.site-foot a {
-  color: #1f6fa8;
+.site-foot-item {
+  display: grid;
+  gap: 3px;
+  width: fit-content;
+  color: inherit;
   text-decoration: none;
-  border-bottom: 2px solid var(--sky);
 }
-.site-foot a:hover { color: var(--ink); border-color: var(--ink); }
+.site-foot-item span { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.site-foot-item strong { color: #176da8; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.site-foot-item:hover strong { color: var(--ink); text-decoration: underline; text-decoration-color: var(--sky); text-underline-offset: 4px; }
+.site-foot-phone-row { display: grid; gap: 12px; }
+.site-foot-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+.site-foot-bottom p { margin: 0; }
+.site-foot-bottom a { color: #176da8; font-weight: 850; text-decoration: none; }
+.site-foot-bottom a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 .lang-toggle {
   appearance: none;
   border: 2px solid #111;
@@ -1449,6 +1474,7 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 
 @media (max-width: 1100px) {
   .process-reel { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .site-foot-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 900px) {
   .shell { width: min(1040px, calc(100% - 28px)); }
@@ -1495,6 +1521,10 @@ body[data-device="handheld"] #desktop-install-note { display: none !important; }
 }
 @media (max-width: 560px) {
   .process-reel { grid-template-columns: 1fr; }
+  .site-foot-inner { padding: 24px 20px; }
+  .site-foot-grid { grid-template-columns: 1fr; gap: 26px; }
+  .site-foot-brand-block > p { max-width: none; }
+  .site-foot-bottom { align-items: flex-start; flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) {
   .promise, .road-card, .install-steps, .install-note, .cta,

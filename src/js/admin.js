@@ -78,7 +78,7 @@ function brand() {
   return el("div", { class: "brand" }, [
     mark,
     el("span", { class: "brand-name", text: "Nako" }),
-    el("span", { class: "brand-sub", text: "taxi rank network" })
+    el("span", { class: "brand-sub", text: "Transport network" })
   ]);
 }
 
@@ -89,6 +89,8 @@ function renderDashboard(root, client) {
   const recent = el("div", { class: "panel" });
   const mix = el("div", { class: "panel" });
   const routesPanel = el("div", { class: "panel wide" });
+  const applicationsPanel = el("div", { class: "panel wide" });
+  let applicationsMounted = false;
   const notice = el("p", { class: "hint", text: "Loading usage…" });
   root.append(el("div", { class: "admin-shell" }, [
     el("aside", { class: "admin-side" }, [
@@ -107,6 +109,7 @@ function renderDashboard(root, client) {
       stats,
       el("div", { class: "admin-split" }, [el("section", { class: "panel" }, [el("h2", { text: "Last 14 days" }), chart]), mix]),
       el("div", { class: "admin-split" }, [cities, recent]),
+      applicationsPanel,
       routesPanel
     ])
   ]));
@@ -122,6 +125,10 @@ function renderDashboard(root, client) {
       console.warn(error);
     }
     paintRoutes(routesPanel, client);
+    if (!applicationsMounted) {
+      applicationsMounted = true;
+      paintApplications(applicationsPanel, client);
+    }
   }
 
   load();
@@ -190,6 +197,74 @@ function timeAgo(value) {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
   return `${Math.round(hours / 24)} d ago`;
+}
+
+function paintApplications(panel, client) {
+  clear(panel);
+  let activeType = "taxi";
+  const tabs = el("div", { class: "admin-tabs", role: "tablist" });
+  const list = el("div", { class: "application-list" });
+  panel.append(
+    el("div", { class: "step-row" }, [el("h2", { text: "Driver verification" }), el("span", { class: "live-dot", text: "Live" })]),
+    el("p", { class: "hint", text: "Review driver and vehicle information. Approved drivers can share location; rejected drivers receive your message and can correct their application." }),
+    tabs,
+    list
+  );
+  for (const type of ["taxi", "kombi", "bus"]) {
+    tabs.append(el("button", {
+      type: "button", role: "tab", class: `admin-tab${type === activeType ? " is-active" : ""}`,
+      text: type[0].toUpperCase() + type.slice(1), onclick: () => {
+        activeType = type;
+        for (const button of tabs.children) button.classList.toggle("is-active", button.textContent.toLowerCase() === type);
+        load();
+      }
+    }));
+  }
+
+  async function load() {
+    clear(list);
+    list.append(el("p", { class: "hint", text: "Loading applications…" }));
+    const { data, error } = await client.from("driver_profiles")
+      .select("user_id,full_name,phone,transport_type,vehicle_description,plate,route_ids,status,rejection_message,created_at")
+      .eq("transport_type", activeType)
+      .order("created_at", { ascending: false });
+    clear(list);
+    if (error) { list.append(el("p", { class: "form-error", text: "Applications will appear after the new Supabase schema is applied." })); return; }
+    const rows = data || [];
+    if (!rows.length) { list.append(el("p", { class: "hint", text: `No ${activeType} applications yet.` })); return; }
+    for (const profile of rows) list.append(applicationCard(profile));
+  }
+
+  function applicationCard(profile) {
+    const message = el("textarea", { placeholder: "Reason and what the driver must correct", "aria-label": "Rejection reason" });
+    const feedback = el("p", { class: "hint", hidden: true });
+    async function review(status) {
+      if (status === "rejected" && !message.value.trim()) { feedback.textContent = "Type a clear rejection reason first."; feedback.hidden = false; return; }
+      feedback.textContent = "Saving…";
+      feedback.hidden = false;
+      const { error } = await client.rpc("review_driver", { p_driver_id: profile.user_id, p_status: status, p_message: message.value.trim() || null });
+      feedback.textContent = error ? "The decision could not be saved." : status === "approved" ? "Driver approved." : "Correction message sent.";
+      if (!error) window.setTimeout(load, 450);
+    }
+    return el("article", { class: `application-card status-${profile.status}` }, [
+      el("div", { class: "application-head" }, [
+        el("div", {}, [el("strong", { text: profile.full_name }), el("span", { text: `${profile.vehicle_description} · ${profile.plate}` })]),
+        el("span", { class: "status-pill", text: profile.status })
+      ]),
+      el("p", { text: `${profile.phone} · ${(profile.route_ids || []).length} registered route${(profile.route_ids || []).length === 1 ? "" : "s"}` }),
+      message,
+      el("div", { class: "row-actions" }, [
+        el("button", { type: "button", class: "find compact", onclick: () => review("approved") }, ["Approve"]),
+        el("button", { type: "button", class: "ghost", onclick: () => review("rejected") }, ["Request changes"])
+      ]),
+      feedback
+    ]);
+  }
+
+  load();
+  client.channel("admin-driver-applications")
+    .on("postgres_changes", { event: "*", schema: "public", table: "driver_profiles" }, load)
+    .subscribe();
 }
 
 async function loadAllRoutes(client) {

@@ -24,7 +24,7 @@ await watch(page);
 await page.setViewport({ width: 1280, height: 800 });
 await page.goto("http://127.0.0.1:4173/", { waitUntil: "networkidle0", timeout: 30000 });
 const home = await page.$eval("h1", (node) => node.textContent);
-if (!home.includes("digital taxi-rank")) throw new Error(`unexpected home heading: ${home}`);
+if (!home.toLowerCase().includes("coming")) throw new Error(`unexpected home heading: ${home}`);
 const shot = (name) => new URL(name, out).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 await page.screenshot({ path: shot("home.png") });
 
@@ -42,7 +42,8 @@ const selected = await phone.$eval(".type-card.is-selected strong", (node) => no
 if (selected !== "Kombi") throw new Error(`default transport ${selected}`);
 await phone.screenshot({ path: shot("form.png"), fullPage: true });
 await phone.evaluate(() => {
-  document.querySelector("#app .zone-card")?.click();
+  const area = document.querySelector("#app .zone-block select");
+  if (area && area.options.length > 1) { area.selectedIndex = 1; area.dispatchEvent(new Event("change")); }
   document.querySelector("#app .find")?.click();
 });
 await phone.waitForSelector("#app .maplibregl-canvas", { timeout: 20000 });
@@ -50,9 +51,11 @@ await phone.waitForFunction(() => {
   const veil = document.querySelector(".veil");
   return veil && veil.hidden;
 }, { timeout: 15000 });
-await phone.waitForSelector(".vehicle", { timeout: 10000 });
-const vehicleText = await phone.$eval(".vehicle", (node) => node.innerText);
-if (!/Simulated/i.test(vehicleText)) throw new Error(vehicleText);
+const simulated = await phone.$$(".vehicle");
+for (const vehicle of simulated) {
+  const text = await vehicle.evaluate((node) => node.innerText);
+  if (/simulated/i.test(text)) throw new Error(`simulation remains: ${text}`);
+}
 await new Promise((resolve) => setTimeout(resolve, 1500));
 await phone.screenshot({ path: shot("finder.png") });
 

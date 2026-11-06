@@ -141,7 +141,7 @@ begin
   if p_event_name not in (
     'app_open', 'info_view', 'install_click', 'install_accepted', 'search',
     'transport_select', 'city_select', 'route_select', 'recommendation_accept',
-    'recommendation_skip', 'location_set'
+    'recommendation_skip', 'location_set', 'directions_open'
   ) then
     raise exception 'invalid event';
   end if;
@@ -320,6 +320,161 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'routes'
   ) then
     alter publication supabase_realtime add table public.routes;
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';
+
+-- Driver registration, approval and deliberately delayed live locations.
+create table if not exists public.driver_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  full_name text not null check (char_length(full_name) between 2 and 100),
+  phone text not null check (char_length(phone) between 7 and 30),
+  transport_type text not null check (transport_type in ('taxi', 'kombi', 'bus')),
+  vehicle_description text not null check (char_length(vehicle_description) between 2 and 120),
+  plate text not null check (char_length(plate) between 2 and 30),
+  route_ids text[] not null default '{}',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  rejection_message text,
+  reviewed_at timestamptz,
+  reviewed_by uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists driver_profiles_plate_idx on public.driver_profiles (upper(plate));
+create index if not exists driver_profiles_queue_idx on public.driver_profiles (transport_type, status, created_at desc);
+
+create table if not exists public.driver_locations (
+  driver_id uuid primary key references public.driver_profiles(user_id) on delete cascade,
+  transport_type text not null check (transport_type in ('taxi', 'kombi', 'bus')),
+  plate text not null,
+  route_ids text[] not null default '{}',
+  lat double precision not null check (lat between -90 and 90),
+  lng double precision not null check (lng between -180 and 180),
+  accuracy double precision,
+  speed double precision,
+  heading double precision,
+  motion_state text not null default 'idle' check (motion_state in ('moving', 'idle')),
+  sharing boolean not null default false,
+  sampled_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists driver_locations_public_idx on public.driver_locations (transport_type, sharing, updated_at desc);
+create index if not exists driver_locations_routes_gin_idx on public.driver_locations using gin (route_ids);
+
+drop trigger if exists driver_profiles_touch on public.driver_profiles;
+create trigger driver_profiles_touch before update on public.driver_profiles
+for each row execute function public.touch_updated_at();
+
+create or replace function public.publish_driver_location(
+  p_lat double precision,
+  p_lng double precision,
+  p_accuracy double precision default null,
+  p_speed double precision default null,
+  p_heading double precision default null,
+  p_sampled_at timestamptz default now()
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  p public.driver_profiles%rowtype;
+  last_update timestamptz;
+  last_lat double precision;
+  last_lng double precision;
+  state text;
+begin
+  select * into p from public.driver_profiles where user_id = auth.uid();
+  if p.user_id is null or p.status <> 'approved' then raise exception 'driver not approved'; end if;
+  if p_accuracy is not null and p_accuracy > 120 then return jsonb_build_object('ok', false, 'reason', 'accuracy'); end if;
+  select updated_at, lat, lng into last_update, last_lat, last_lng from public.driver_locations where driver_id = auth.uid();
+  if last_update is not null and last_update > now() - interval '8 seconds' then
+    return jsonb_build_object('ok', false, 'reason', 'rate');
+  end if;
+  state := case
+    when coalesce(p_speed, 0) >= 1.2 then 'moving'
+    when last_lat is not null and sqrt(
+      power((p_lat - last_lat) * 111320, 2) +
+      power((p_lng - last_lng) * 111320 * cos(radians(p_lat)), 2)
+    ) >= 20 then 'moving'
+    else 'idle'
+  end;
+  insert into public.driver_locations as d
+    (driver_id, transport_type, plate, route_ids, lat, lng, accuracy, speed, heading, motion_state, sharing, sampled_at, updated_at)
+  values
+    (p.user_id, p.transport_type, p.plate, p.route_ids, p_lat, p_lng, p_accuracy, p_speed, p_heading, state, true, coalesce(p_sampled_at, now()), now())
+  on conflict (driver_id) do update set
+    transport_type = excluded.transport_type,
+    plate = excluded.plate,
+    route_ids = excluded.route_ids,
+    lat = excluded.lat,
+    lng = excluded.lng,
+    accuracy = excluded.accuracy,
+    speed = excluded.speed,
+    heading = excluded.heading,
+    motion_state = excluded.motion_state,
+    sharing = true,
+    sampled_at = excluded.sampled_at,
+    updated_at = now();
+  return jsonb_build_object('ok', true, 'motion_state', state);
+end;
+$$;
+
+create or replace function public.stop_driver_location()
+returns void language sql security definer set search_path = public
+as $$ update public.driver_locations set sharing = false, updated_at = now() where driver_id = auth.uid(); $$;
+
+create or replace function public.review_driver(p_driver_id uuid, p_status text, p_message text default null)
+returns void language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'not allowed'; end if;
+  if p_status not in ('approved', 'rejected') then raise exception 'invalid status'; end if;
+  update public.driver_profiles set
+    status = p_status,
+    rejection_message = case when p_status = 'rejected' then nullif(trim(p_message), '') else null end,
+    reviewed_at = now(), reviewed_by = auth.uid()
+  where user_id = p_driver_id;
+  if p_status = 'rejected' then update public.driver_locations set sharing = false where driver_id = p_driver_id; end if;
+end;
+$$;
+
+alter table public.driver_profiles enable row level security;
+alter table public.driver_locations enable row level security;
+
+drop policy if exists driver_profiles_own_select on public.driver_profiles;
+create policy driver_profiles_own_select on public.driver_profiles for select to authenticated
+using ((select auth.uid()) = user_id or public.is_admin());
+drop policy if exists driver_profiles_own_insert on public.driver_profiles;
+create policy driver_profiles_own_insert on public.driver_profiles for insert to authenticated
+with check ((select auth.uid()) = user_id and status = 'pending');
+drop policy if exists driver_profiles_own_update on public.driver_profiles;
+create policy driver_profiles_own_update on public.driver_profiles for update to authenticated
+using (((select auth.uid()) = user_id and status in ('pending', 'rejected')) or public.is_admin())
+with check ((((select auth.uid()) = user_id and status = 'pending' and rejection_message is null and reviewed_by is null and reviewed_at is null)) or public.is_admin());
+
+drop policy if exists driver_locations_public_select on public.driver_locations;
+create policy driver_locations_public_select on public.driver_locations for select to anon, authenticated
+using (sharing and updated_at > now() - interval '5 minutes');
+
+grant select, insert, update on public.driver_profiles to authenticated;
+grant select on public.driver_locations to anon, authenticated;
+revoke all on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz) from public;
+grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz) to authenticated;
+revoke all on function public.stop_driver_location() from public;
+grant execute on function public.stop_driver_location() to authenticated;
+revoke all on function public.review_driver(uuid, text, text) from public;
+grant execute on function public.review_driver(uuid, text, text) to authenticated;
+
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'driver_locations') then
+    alter publication supabase_realtime add table public.driver_locations;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'driver_profiles') then
+    alter publication supabase_realtime add table public.driver_profiles;
   end if;
 end $$;
 

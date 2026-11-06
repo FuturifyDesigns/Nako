@@ -98,9 +98,9 @@ const authConfig = await fetch(`https://api.supabase.com/v1/projects/${ref}/conf
   method: "PATCH",
   headers,
   body: JSON.stringify({
-    disable_signup: true,
+    disable_signup: false,
     site_url: "https://futurifydesigns.github.io/Nako/",
-    uri_allow_list: "https://futurifydesigns.github.io/Nako/**"
+    uri_allow_list: "https://futurifydesigns.github.io/Nako/**,https://futurifydesigns.github.io/Nako/driver/**"
   })
 });
 console.log(`auth config ${authConfig.status}`);

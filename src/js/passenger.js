@@ -1,8 +1,9 @@
 import { el, icon, clear } from "./dom.js";
 import { formatDistance, haversine, nearestLandmark, rankRoutes, suggestPlaces } from "./geo.js";
 import { getLang, t, toggleLang } from "./i18n.js";
-import { simulateFleet } from "./simulate.js";
 import { createVehicleLayer } from "./vehicle-layer.js";
+import { loadLiveVehicles, watchLiveVehicles } from "./live-vehicles.js";
+import { addGooglePlaceMarkers, createGoogleMap, createGoogleVehicleLayer, googleMapsConfigured } from "./google-map.js";
 import { currentCatalog, onSync, startSync, track, trackOnce } from "./sync.js";
 
 function typeMeta() {
@@ -14,9 +15,7 @@ function typeMeta() {
 }
 
 function statusLabel(state) {
-  if (state === "nearby") return t("statusNearby");
-  if (state === "on_way") return t("statusOnWay");
-  return t("statusAtRank");
+  return state === "moving" ? "On the move" : "Idle";
 }
 
 function labelFor(type) {
@@ -44,6 +43,7 @@ export async function mountPassenger(root) {
     hideRecommend: false,
     locationKey: ""
   };
+  let recommendationVersion = 0;
 
   const shell = el("div", { class: "finder" });
   const form = el("section", { class: "card finder-card" });
@@ -318,28 +318,19 @@ export async function mountPassenger(root) {
     clear(zoneBlock);
     const zones = state.place?.zones || [];
     if (!zones.length) return;
+    const select = el("select", { "aria-label": t("stepZone", { place: state.place.name }) }, [
+      el("option", { value: "all", text: t("allSuburbs"), selected: state.zoneId === "all" ? "selected" : null }),
+      ...zones.map((zone) => el("option", { value: zone.id, text: zone.name, selected: state.zoneId === zone.id ? "selected" : null }))
+    ]);
+    select.addEventListener("change", () => {
+      state.zoneId = select.value;
+      state.routeId = "all";
+      updateRoutes();
+    });
     zoneBlock.append(
       el("h2", { class: "step", text: t("stepZone", { place: state.place.name }) }),
-      el("div", { class: "zone-grid" }, [
-        zoneButton("all", t("allSuburbs"), t("entirePlace", { place: state.place.name })),
-        ...zones.map((zone) => zoneButton(zone.id, zone.name, zone.summary))
-      ])
+      select
     );
-  }
-
-  function zoneButton(id, name, summary) {
-    const on = state.zoneId === id;
-    return el("button", {
-      type: "button",
-      class: `zone-card${on ? " is-selected" : ""}`,
-      "aria-pressed": on ? "true" : "false",
-      onclick: () => {
-        state.zoneId = id;
-        state.routeId = "all";
-        updateZones();
-        updateRoutes();
-      }
-    }, [el("strong", { text: name }), el("span", { text: summary })]);
   }
 
   function filteredRoutes() {
@@ -375,7 +366,8 @@ export async function mountPassenger(root) {
     updateRecommendation();
   }
 
-  function updateRecommendation() {
+  async function updateRecommendation() {
+    const version = ++recommendationVersion;
     clear(recommendBox);
     if (state.hideRecommend) {
       recommendBox.hidden = true;
@@ -387,10 +379,16 @@ export async function mountPassenger(root) {
       recommendBox.hidden = true;
       return;
     }
+    const vehicles = await loadLiveVehicles({ transport: state.transport, point });
+    if (version !== recommendationVersion || state.hideRecommend) return;
+    const activeCounts = new Map();
+    for (const vehicle of vehicles) for (const routeId of vehicle.routeIds || []) activeCounts.set(routeId, (activeCounts.get(routeId) || 0) + 1);
+    ranked.sort((a, b) => (activeCounts.get(b.route.id) || 0) - (activeCounts.get(a.route.id) || 0) || (a.distance || Infinity) - (b.distance || Infinity));
     const best = ranked[0];
+    const available = activeCounts.get(best.route.id) || 0;
     recommendBox.hidden = false;
     recommendBox.append(
-      el("p", { text: t("closestRoute", { name: best.route.name, distance: formatDistance(best.distance) }) }),
+      el("p", { text: available ? `${best.route.name} is the best match with ${available} active vehicle${available === 1 ? "" : "s"} nearby.` : t("closestRoute", { name: best.route.name, distance: formatDistance(best.distance) }) }),
       el("div", { class: "recommend-actions" }, [
         el("button", { type: "button", class: "text-button", onclick: () => acceptRecommendation(best.route.id) }, [t("useRoute")]),
         el("button", { type: "button", class: "text-button muted", onclick: () => skipRecommendation() }, [t("illDecide")])
@@ -533,8 +531,11 @@ export async function mountPassenger(root) {
 
   let map;
   let layer;
+  let stopFleetWatch;
 
   function destroyMap() {
+    stopFleetWatch?.();
+    stopFleetWatch = null;
     layer?.clear?.();
     if (map) map.remove();
     map = null;
@@ -548,13 +549,8 @@ export async function mountPassenger(root) {
     state.selectedVehicle = null;
     const working = ranked.length ? ranked : [];
     const active = chosen || working[0]?.route || null;
-    const distance = working.find((item) => item.route.id === active?.id)?.distance;
-    state.fleet = simulateFleet({
-      routes: [active, working.find((item) => item.route.id !== active?.id)?.route].filter(Boolean),
-      point,
-      distanceTo: distance,
-      type: state.transport
-    });
+    let currentRoute = active;
+    state.fleet = [];
 
     const mapCanvas = el("div", { class: "map-canvas" });
     const sheet = el("section", { class: "sheet is-open" });
@@ -572,32 +568,20 @@ export async function mountPassenger(root) {
       el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
     ]);
 
-    let userCollapsed = false;
-    let sheetHideTimer = 0;
-    let mapMoving = false;
-
     function setSheetHidden(hidden) {
       sheet.classList.toggle("is-hidden", hidden);
       sheet.classList.toggle("is-open", !hidden);
       results.classList.toggle("sheet-collapsed", hidden);
-    }
-
-    function hideSheetForMapMove() {
-      if (mapMoving) return;
-      mapMoving = true;
-      window.clearTimeout(sheetHideTimer);
-      setSheetHidden(true);
-    }
-
-    function showSheetAfterMapIdle() {
-      mapMoving = false;
-      window.clearTimeout(sheetHideTimer);
-      sheetHideTimer = window.setTimeout(() => {
-        if (!mapMoving && !userCollapsed) setSheetHidden(false);
-      }, 520);
+      sheetHandle?.setAttribute("aria-expanded", hidden ? "false" : "true");
+      const arrow = sheetHandle?.querySelector(".sheet-arrow");
+      if (arrow) arrow.textContent = hidden ? "⌃" : "⌄";
     }
 
     function openDirections(vehicle) {
+      if (!navigator.onLine) {
+        sheet.prepend(el("p", { class: "hint offline-direction", text: "Directions need a connection. Your selected driver stays visible from the last saved update." }));
+        return;
+      }
       const url = `https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}&travelmode=walking`;
       window.open(url, "_blank", "noopener,noreferrer");
       track("directions_open", { city: state.place?.name, transport: state.transport, routeId: vehicle.routeId });
@@ -607,14 +591,12 @@ export async function mountPassenger(root) {
       type: "button",
       class: "sheet-handle",
       "aria-label": "Toggle details",
+      "aria-expanded": "true",
       onclick: () => {
-        userCollapsed = !sheet.classList.contains("is-hidden") ? true : false;
-        // If currently open → user wants it closed. If hidden → user wants it open.
         const hide = !sheet.classList.contains("is-hidden");
-        userCollapsed = hide;
         setSheetHidden(hide);
       }
-    });
+    }, [el("span", { text: "Driver details" }), el("span", { class: "sheet-arrow", text: "⌄", "aria-hidden": "true" })]);
     sheet.append(sheetHandle, sheetBody);
 
     results.append(
@@ -696,53 +678,32 @@ export async function mountPassenger(root) {
       map?.easeTo({ center: [vehicle.lng, vehicle.lat], zoom: 16.1, duration: 450 });
       fillSheet(activeRoute());
       setSheetHidden(false);
-      userCollapsed = false;
     }
 
-    let currentRoute = active;
     function activeRoute() { return currentRoute; }
 
     function switchRoute(route) {
       currentRoute = route;
       state.routeId = route.id;
-      const rankedNow = rankRoutes(filteredRoutes(), focusPoint() || point);
-      const distanceNow = rankedNow.find((item) => item.route.id === route.id)?.distance;
-      const second = rankedNow.find((item) => item.route.id !== route.id)?.route;
-      state.fleet = simulateFleet({
-        routes: [route, second].filter(Boolean),
-        point: focusPoint(),
-        distanceTo: distanceNow,
-        type: state.transport
-      });
-      drawRoute(route);
-      layer?.setVehicles(state.fleet);
-      layer?.setSelected(state.selectedVehicle);
+      state.selectedVehicle = null;
       fillSheet(route);
       focusMap(route);
       updatePickup();
+      startFleetWatch();
     }
 
-    function simplifyPath(path, maxPoints = 48) {
-      if (!path?.length) return [];
-      if (path.length <= maxPoints) return path.map((spot) => [spot.lng, spot.lat]);
-      const step = (path.length - 1) / (maxPoints - 1);
-      const coords = [];
-      for (let i = 0; i < maxPoints; i += 1) {
-        const spot = path[Math.round(i * step)];
-        coords.push([spot.lng, spot.lat]);
-      }
-      return coords;
-    }
-
-    function drawRoute(route) {
-      if (!map?.getSource("corridors")) return;
-      // One tidy corridor only — extra overlapping routes looked scattered.
-      const features = route?.path?.length ? [{
-        type: "Feature",
-        properties: { chosen: 1 },
-        geometry: { type: "LineString", coordinates: simplifyPath(route.path) }
-      }] : [];
-      map.getSource("corridors").setData({ type: "FeatureCollection", features });
+    function startFleetWatch() {
+      stopFleetWatch?.();
+      stopFleetWatch = watchLiveVehicles(
+        () => ({ transport: state.transport, routeId: currentRoute?.id || "all", point: focusPoint() }),
+        (vehicles) => {
+          state.fleet = vehicles;
+          if (state.selectedVehicle && !vehicles.some((vehicle) => vehicle.id === state.selectedVehicle)) state.selectedVehicle = null;
+          layer?.setVehicles(vehicles);
+          layer?.setSelected(state.selectedVehicle);
+          fillSheet(currentRoute);
+        }
+      );
     }
 
     function focusMap(route) {
@@ -807,6 +768,30 @@ export async function mountPassenger(root) {
 
     fillSheet(active);
     updatePickup();
+    startFleetWatch();
+
+    if (googleMapsConfigured()) {
+      const center = point || focusPoint();
+      createGoogleMap(mapCanvas, { center, zoom: 14 }).then((googleMap) => {
+        map = googleMap;
+        addGooglePlaceMarkers(map, placesGeoJSON());
+        layer = createGoogleVehicleLayer(map, { onSelect: (vehicle) => selectVehicle(vehicle) });
+        layer.setVehicles(state.fleet);
+        layer.setSelected(state.selectedVehicle);
+        focusMap(active || { path: [center] });
+        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;
+        window.setTimeout(() => {
+          state.searching = false;
+          searchVeil.hidden = true;
+          if (pinFirst) setPinMode(true);
+        }, delay);
+      }).catch((error) => {
+        console.warn(error);
+        searchVeil.hidden = true;
+        sheet.prepend(el("p", { class: "hint", text: "Google Maps is unavailable. Driver details are still updating." }));
+      });
+      return;
+    }
 
     if (!globalThis.maplibregl) {
       searchVeil.hidden = true;
@@ -834,38 +819,6 @@ export async function mountPassenger(root) {
     map.on("load", () => {
       map.resize();
       bumpPlaceLabels(map);
-      map.addSource("corridors", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] }
-      });
-      map.addLayer({
-        id: "corridor-halo",
-        type: "line",
-        source: "corridors",
-        layout: {
-          "line-cap": "round",
-          "line-join": "round"
-        },
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": 8,
-          "line-opacity": 0.9
-        }
-      });
-      map.addLayer({
-        id: "corridor-line",
-        type: "line",
-        source: "corridors",
-        layout: {
-          "line-cap": "round",
-          "line-join": "round"
-        },
-        paint: {
-          "line-color": "#1f6feb",
-          "line-width": 4,
-          "line-opacity": 1
-        }
-      });
       map.addSource("nako-places", {
         type: "geojson",
         data: placesGeoJSON()
@@ -903,14 +856,10 @@ export async function mountPassenger(root) {
       layer = createVehicleLayer(map, maplibregl, {
         onSelect: (vehicle) => selectVehicle(vehicle)
       });
-      drawRoute(active);
       layer.setVehicles(state.fleet);
       layer.setSelected(state.selectedVehicle);
       focusMap(active || { path: [point || focusPoint()] });
 
-      // Only tuck the sheet on drag — zooming used to thrash layout every frame.
-      map.on("dragstart", hideSheetForMapMove);
-      map.on("dragend", showSheetAfterMapIdle);
 
       const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 700;
       window.setTimeout(() => {

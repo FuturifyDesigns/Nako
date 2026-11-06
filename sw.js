@@ -1,4 +1,4 @@
-const CACHE = "nako-shell-2026-10-27-19";
+const CACHE = "nako-shell-2026-11-06-20";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -7,6 +7,8 @@ const PRECACHE = [
   "./app/index.html",
   "./admin/",
   "./admin/index.html",
+  "./driver/",
+  "./driver/index.html",
   "./manifest.webmanifest",
   "./assets/css/app.css",
   "./assets/css/landing.css",
@@ -29,7 +31,6 @@ const PRECACHE = [
   "./assets/fonts/outfit-700.woff2",
   "./vendor/maplibre-gl.js",
   "./vendor/maplibre-gl.css",
-  "./vendor/three.module.js",
   "./vendor/supabase.js",
   "./vendor/gsap.min.js",
   "./vendor/ScrollTrigger.min.js",
@@ -42,7 +43,10 @@ const PRECACHE = [
   "./src/js/app-boot.js",
   "./src/js/admin-boot.js",
   "./src/js/admin.js",
+  "./src/js/driver.js",
   "./src/js/passenger.js",
+  "./src/js/live-vehicles.js",
+  "./src/js/google-map.js",
   "./src/js/sync.js",
   "./src/js/install.js",
   "./src/js/config.js",
@@ -50,8 +54,6 @@ const PRECACHE = [
   "./src/js/geo.js",
   "./src/js/idb.js",
   "./src/js/session.js",
-  "./src/js/simulate.js",
-  "./src/js/models.js",
   "./src/js/vehicle-layer.js"
 ];
 

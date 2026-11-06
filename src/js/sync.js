@@ -14,7 +14,8 @@ const EVENTS = new Set([
   "route_select",
   "recommendation_accept",
   "recommendation_skip",
-  "location_set"
+  "location_set",
+  "directions_open"
 ]);
 
 let client = null;

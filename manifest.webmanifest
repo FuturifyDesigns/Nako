@@ -1,5 +1,5 @@
 {
-  "name": "Nako taxi rank network",
+  "name": "Nako Transport network",
   "short_name": "Nako",
   "description": "Find a taxi, kombi, or coach corridor in Botswana.",
   "start_url": "./app/",

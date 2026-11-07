@@ -260,7 +260,7 @@ function paintApplications(panel, client) {
     clear(list);
     list.append(el("p", { class: "hint", text: "Loading applications…" }));
     const { data, error } = await client.from("driver_profiles")
-      .select("user_id,full_name,phone,transport_type,vehicle_description,plate,route_ids,status,rejection_message,created_at")
+      .select("user_id,full_name,phone,transport_type,vehicle_description,plate,route_ids,status,rejection_message,warning_message,warned_at,banned_at,created_at")
       .eq("transport_type", activeType)
       .order("created_at", { ascending: false });
     clear(list);
@@ -275,7 +275,12 @@ function paintApplications(panel, client) {
       name: id.startsWith("manual:") ? id.slice(7) : routeNames.get(id) || id,
       manual: id.startsWith("manual:")
     }));
-    const message = el("textarea", { placeholder: "Reason and what the driver must correct", "aria-label": "Rejection reason" });
+    const approved = profile.status === "approved";
+    const banned = profile.status === "banned";
+    const message = el("textarea", {
+      placeholder: approved ? "Type the warning or reason for a ban" : "Reason and what the driver must correct",
+      "aria-label": approved ? "Driver moderation message" : "Rejection reason"
+    });
     const feedback = el("p", { class: "hint", hidden: true });
     async function review(status) {
       if (status === "rejected" && !message.value.trim()) { feedback.textContent = "Type a clear rejection reason first."; feedback.hidden = false; return; }
@@ -285,6 +290,41 @@ function paintApplications(panel, client) {
       feedback.textContent = error ? "The decision could not be saved." : status === "approved" ? "Driver approved." : "Correction message sent.";
       if (!error) window.setTimeout(load, 450);
     }
+    async function moderate(action) {
+      const text = message.value.trim();
+      if ((action === "warn" || action === "ban") && !text) {
+        feedback.textContent = `Type a clear ${action === "warn" ? "warning" : "ban reason"} first.`;
+        feedback.hidden = false;
+        message.focus();
+        return;
+      }
+      if (action === "delete" && !window.confirm(`Delete ${profile.full_name}'s driver profile? This removes their vehicle and live location record.`)) return;
+      if (action === "ban" && !window.confirm(`Ban ${profile.full_name}? Their live location will be switched off immediately.`)) return;
+      feedback.textContent = action === "delete" ? "Deleting driver…" : "Saving…";
+      feedback.hidden = false;
+      const { error } = await client.rpc("moderate_driver", { p_driver_id: profile.user_id, p_action: action, p_message: text || null });
+      feedback.textContent = error
+        ? "The moderation action could not be saved."
+        : action === "warn" ? "Warning sent to the driver."
+          : action === "ban" ? "Driver banned and location sharing stopped."
+            : "Driver profile deleted.";
+      if (!error) window.setTimeout(load, 450);
+    }
+    const actions = approved
+      ? [
+          el("button", { type: "button", class: "ghost moderation-warn", onclick: () => moderate("warn") }, ["Warn driver"]),
+          el("button", { type: "button", class: "ghost moderation-ban", onclick: () => moderate("ban") }, ["Ban driver"]),
+          el("button", { type: "button", class: "ghost moderation-delete", onclick: () => moderate("delete") }, ["Delete driver"])
+        ]
+      : banned
+        ? [
+            el("button", { type: "button", class: "find compact", onclick: () => review("approved") }, ["Restore driver"]),
+            el("button", { type: "button", class: "ghost moderation-delete", onclick: () => moderate("delete") }, ["Delete driver"])
+          ]
+        : [
+            el("button", { type: "button", class: "find compact", onclick: () => review("approved") }, ["Approve"]),
+            el("button", { type: "button", class: "ghost", onclick: () => review("rejected") }, ["Request changes"])
+          ];
     return el("article", { class: `application-card status-${profile.status}` }, [
       el("div", { class: "application-head" }, [
         el("div", {}, [el("strong", { text: profile.full_name }), el("span", { text: `${profile.vehicle_description} · ${profile.plate}` })]),
@@ -297,11 +337,14 @@ function paintApplications(panel, client) {
           ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "", text: route.manual ? `${route.name} · manual` : route.name }))
           : [el("span", { text: "No routes supplied" })])
       ]),
-      message,
-      el("div", { class: "row-actions" }, [
-        el("button", { type: "button", class: "find compact", onclick: () => review("approved") }, ["Approve"]),
-        el("button", { type: "button", class: "ghost", onclick: () => review("rejected") }, ["Request changes"])
-      ]),
+      approved && profile.warning_message ? el("div", { class: "moderation-note" }, [
+        el("strong", { text: "Current warning" }), el("p", { text: profile.warning_message })
+      ]) : null,
+      banned ? el("div", { class: "moderation-note is-banned" }, [
+        el("strong", { text: "Driver banned" }), el("p", { text: profile.rejection_message || "Location sharing is disabled." })
+      ]) : null,
+      banned ? null : message,
+      el("div", { class: "row-actions moderation-actions" }, actions),
       feedback
     ]);
   }

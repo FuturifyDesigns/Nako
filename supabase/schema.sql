@@ -334,8 +334,11 @@ create table if not exists public.driver_profiles (
   vehicle_description text not null check (char_length(vehicle_description) between 2 and 120),
   plate text not null check (char_length(plate) between 2 and 30),
   route_ids text[] not null default '{}',
-  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'banned')),
   rejection_message text,
+  warning_message text,
+  warned_at timestamptz,
+  banned_at timestamptz,
   reviewed_at timestamptz,
   reviewed_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
@@ -344,6 +347,12 @@ create table if not exists public.driver_profiles (
 
 -- Upgrade early driver-profile drafts that used separate make/model/colour fields.
 alter table public.driver_profiles add column if not exists vehicle_description text;
+alter table public.driver_profiles add column if not exists warning_message text;
+alter table public.driver_profiles add column if not exists warned_at timestamptz;
+alter table public.driver_profiles add column if not exists banned_at timestamptz;
+alter table public.driver_profiles drop constraint if exists driver_profiles_status_check;
+alter table public.driver_profiles add constraint driver_profiles_status_check
+  check (status in ('pending', 'approved', 'rejected', 'banned'));
 do $$
 begin
   if exists (
@@ -391,13 +400,15 @@ drop trigger if exists driver_profiles_touch on public.driver_profiles;
 create trigger driver_profiles_touch before update on public.driver_profiles
 for each row execute function public.touch_updated_at();
 
+drop function if exists public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz);
 create or replace function public.publish_driver_location(
   p_lat double precision,
   p_lng double precision,
   p_accuracy double precision default null,
   p_speed double precision default null,
   p_heading double precision default null,
-  p_sampled_at timestamptz default now()
+  p_sampled_at timestamptz default now(),
+  p_motion_state text default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -408,21 +419,23 @@ declare
   last_update timestamptz;
   last_lat double precision;
   last_lng double precision;
+  last_accuracy double precision;
   state text;
 begin
   select * into p from public.driver_profiles where user_id = auth.uid();
   if p.user_id is null or p.status <> 'approved' then raise exception 'driver not approved'; end if;
   if p_accuracy is not null and p_accuracy > 120 then return jsonb_build_object('ok', false, 'reason', 'accuracy'); end if;
-  select updated_at, lat, lng into last_update, last_lat, last_lng from public.driver_locations where driver_id = auth.uid();
+  select updated_at, lat, lng, accuracy into last_update, last_lat, last_lng, last_accuracy from public.driver_locations where driver_id = auth.uid();
   if last_update is not null and last_update > now() - interval '8 seconds' then
     return jsonb_build_object('ok', false, 'reason', 'rate');
   end if;
   state := case
-    when coalesce(p_speed, 0) >= 1.2 then 'moving'
+    when p_motion_state in ('moving', 'idle') then p_motion_state
+    when coalesce(p_speed, 0) >= 1.8 then 'moving'
     when last_lat is not null and sqrt(
       power((p_lat - last_lat) * 111320, 2) +
       power((p_lng - last_lng) * 111320 * cos(radians(p_lat)), 2)
-    ) >= 20 then 'moving'
+    ) >= greatest(35, least(120, coalesce(p_accuracy, 40) + coalesce(last_accuracy, 40))) then 'moving'
     else 'idle'
   end;
   insert into public.driver_locations as d
@@ -459,9 +472,36 @@ begin
   update public.driver_profiles set
     status = p_status,
     rejection_message = case when p_status = 'rejected' then nullif(trim(p_message), '') else null end,
+    warning_message = case when p_status = 'approved' then null else warning_message end,
+    warned_at = case when p_status = 'approved' then null else warned_at end,
+    banned_at = case when p_status = 'approved' then null else banned_at end,
     reviewed_at = now(), reviewed_by = auth.uid()
   where user_id = p_driver_id;
   if p_status = 'rejected' then update public.driver_locations set sharing = false where driver_id = p_driver_id; end if;
+end;
+$$;
+
+create or replace function public.moderate_driver(p_driver_id uuid, p_action text, p_message text default null)
+returns void language plpgsql security definer set search_path = public
+as $$
+declare
+  clean_message text := nullif(trim(p_message), '');
+begin
+  if not public.is_admin() then raise exception 'not allowed'; end if;
+  if p_action not in ('warn', 'ban', 'delete') then raise exception 'invalid action'; end if;
+  if p_action in ('warn', 'ban') and clean_message is null then raise exception 'message required'; end if;
+
+  if p_action = 'warn' then
+    update public.driver_profiles set warning_message = clean_message, warned_at = now(), reviewed_by = auth.uid()
+    where user_id = p_driver_id and status = 'approved';
+  elsif p_action = 'ban' then
+    update public.driver_profiles set status = 'banned', rejection_message = clean_message,
+      warning_message = null, warned_at = null, banned_at = now(), reviewed_at = now(), reviewed_by = auth.uid()
+    where user_id = p_driver_id;
+    update public.driver_locations set sharing = false, updated_at = now() where driver_id = p_driver_id;
+  else
+    delete from public.driver_profiles where user_id = p_driver_id;
+  end if;
 end;
 $$;
 
@@ -485,12 +525,14 @@ using (sharing and updated_at > now() - interval '5 minutes');
 
 grant select, insert, update on public.driver_profiles to authenticated;
 grant select on public.driver_locations to anon, authenticated;
-revoke all on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz) from public;
-grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz) to authenticated;
+revoke all on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) from public;
+grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) to authenticated;
 revoke all on function public.stop_driver_location() from public;
 grant execute on function public.stop_driver_location() to authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
+revoke all on function public.moderate_driver(uuid, text, text) from public;
+grant execute on function public.moderate_driver(uuid, text, text) to authenticated;
 
 do $$
 begin

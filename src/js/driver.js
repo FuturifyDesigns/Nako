@@ -10,6 +10,12 @@ let lastSentAt = 0;
 let lastPosition = null;
 let lastSentPosition = null;
 let lastMotionState = "idle";
+let positionHistory = [];
+let movingEvidence = 0;
+let idleEvidence = 0;
+let profileChannel = null;
+const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
+const SHARING_KEY = "nakolive-driver-sharing-v1";
 
 function brand() {
   return el("a", { class: "brand", href: "../" }, [
@@ -48,7 +54,11 @@ async function boot() {
   }
   await startSync();
   const { data } = await db.auth.getSession();
-  if (!data.session) renderAuth(); else renderDriver(data.session.user);
+  if (!data.session) renderAuth();
+  else {
+    localStorage.setItem(ROLE_CHOICE_KEY, "driver");
+    renderDriver(data.session.user);
+  }
 }
 
 function renderAuth() {
@@ -140,6 +150,7 @@ function renderAuth() {
       button.textContent = "Sign in";
       return;
     }
+    localStorage.setItem(ROLE_CHOICE_KEY, "driver");
     renderDriver(result.data.user);
   });
   root.append(el("section", { class: "card admin-card driver-card" }, [
@@ -151,19 +162,39 @@ function renderAuth() {
 
 async function renderDriver(user) {
   stopSharing(false);
+  clearProfileWatcher();
   clear(root);
   const profile = await profileFor(user.id);
   if (!profile || profile.status === "rejected") renderRegistration(user, profile);
   else if (profile.status === "pending") renderPending(user, profile);
+  else if (profile.status === "banned") renderBanned(user, profile);
   else renderApproved(user, profile);
 }
 
 function shell(title, body, user) {
   clear(root);
+  const signOut = el("button", { type: "button", class: "driver-signout", onclick: async () => {
+    await stopSharing(true);
+    localStorage.setItem(ROLE_CHOICE_KEY, "passenger");
+    await db.auth.signOut();
+    renderAuth();
+  } }, ["Sign out"]);
   root.append(el("section", { class: "card admin-card driver-card" }, [
-    brand(), el("h1", { text: title }), ...body,
-    el("button", { type: "button", class: "text-button muted", onclick: async () => { stopSharing(true); await db.auth.signOut(); renderAuth(); } }, ["Sign out"])
+    el("div", { class: "driver-shell-head" }, [brand(), signOut]),
+    el("h1", { text: title }), ...body
   ]));
+}
+
+function clearProfileWatcher() {
+  if (profileChannel && db) db.removeChannel(profileChannel);
+  profileChannel = null;
+}
+
+function watchProfile(user, onChange) {
+  clearProfileWatcher();
+  profileChannel = db.channel(`driver-profile-${user.id}-${crypto.randomUUID()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "driver_profiles", filter: `user_id=eq.${user.id}` }, onChange)
+    .subscribe();
 }
 
 function renderPending(user, profile) {
@@ -171,10 +202,18 @@ function renderPending(user, profile) {
     el("div", { class: "status-panel pending" }, [el("strong", { text: `${profile.transport_type.toUpperCase()} · ${profile.plate}` }), el("p", { text: "Your information is waiting for an administrator to review it. This screen updates automatically." })]),
     el("p", { class: "hint", text: "You cannot share a live location until the application is approved." })
   ], user);
-  const channel = db.channel(`driver-approval-${user.id}`).on("postgres_changes", { event: "UPDATE", schema: "public", table: "driver_profiles", filter: `user_id=eq.${user.id}` }, async () => {
-    await db.removeChannel(channel);
-    renderDriver(user);
-  }).subscribe();
+  watchProfile(user, () => renderDriver(user));
+}
+
+function renderBanned(user, profile) {
+  shell("Driver access suspended", [
+    el("div", { class: "status-panel rejected" }, [
+      el("strong", { text: `${profile.transport_type.toUpperCase()} · ${profile.plate}` }),
+      el("p", { text: profile.rejection_message || "Your driver access has been suspended by an administrator." })
+    ]),
+    el("p", { class: "hint", text: "Location sharing is disabled. Contact the transport administrator if you believe this is a mistake." })
+  ], user);
+  watchProfile(user, () => renderDriver(user));
 }
 
 function renderRegistration(user, existing) {
@@ -291,6 +330,8 @@ function renderApproved(user, profile) {
   const status = el("strong", { class: "share-state", text: "Location is off" });
   const detail = el("p", { class: "hint", text: "Passengers cannot see this vehicle until you turn location on." });
   const consent = el("input", { type: "checkbox", id: "location-consent" });
+  const shouldResumeSharing = localStorage.getItem(SHARING_KEY) === "true";
+  consent.checked = shouldResumeSharing;
   const consentLabel = el("label", { class: "location-consent", for: "location-consent" }, [
     consent,
     el("span", {}, [
@@ -299,6 +340,13 @@ function renderApproved(user, profile) {
     ])
   ]);
   const button = el("button", { type: "button", class: "find", text: "Turn location on" });
+  const warning = el("div", { class: "status-panel driver-warning", hidden: true });
+  function paintWarning(text) {
+    clear(warning);
+    warning.hidden = !text;
+    if (text) warning.append(el("strong", { text: "Administrator warning" }), el("p", { text }));
+  }
+  paintWarning(profile.warning_message);
   button.addEventListener("click", () => {
     if (watchId != null) {
       stopSharing(true, status, detail, button);
@@ -317,17 +365,37 @@ function renderApproved(user, profile) {
       el("img", { src: `../assets/vehicles/${role.image}`, alt: "", width: "150", height: "96" })
     ]),
     el("p", { class: "driver-role-copy", text: role.copy }),
+    warning,
     el("div", { class: "approval-pop" }, [el("strong", { text: "Approved and ready" }), el("p", { text: "Turn on location only while you are operating. Updates are delayed slightly to reduce data use." })]),
     el("section", { class: "driver-route-summary" }, [
       el("div", { class: "form-section-head" }, [el("strong", { text: "Your routes" }), el("span", { text: `${assignedRoutes.length} total` })]),
       el("div", { class: "driver-route-chips" }, assignedRoutes.length ? assignedRoutes.map((route) => el("span", { text: route })) : [el("p", { class: "hint", text: "No routes saved." })])
     ]),
-    el("section", { class: "driver-share-panel" }, [status, detail, consentLabel, button])
+    el("section", { class: "driver-share-panel" }, [
+      status, detail, consentLabel, button,
+      el("p", { class: "background-location-note", text: "Location can keep updating while the PWA remains allowed to run in the background. Fully closing or force-stopping the app pauses GPS updates until NakoLive is opened again." })
+    ])
   ], user);
+  watchProfile(user, async (payload) => {
+    const next = payload.new || {};
+    if (payload.eventType === "DELETE" || next.status !== "approved") {
+      await stopSharing(true);
+      renderDriver(user);
+      return;
+    }
+    if (next.warning_message !== profile.warning_message) {
+      profile.warning_message = next.warning_message;
+      paintWarning(profile.warning_message);
+      if (profile.warning_message) notify("An administrator sent you a warning.", "error");
+    }
+  });
+  if (shouldResumeSharing) window.setTimeout(() => startSharing(status, detail, button), 250);
 }
 
 function startSharing(status, detail, button) {
   if (!navigator.geolocation) { notify("Location is not available on this device.", "error"); return; }
+  if (watchId != null) return;
+  localStorage.setItem(SHARING_KEY, "true");
   button.disabled = true;
   detail.textContent = "Waiting for an accurate GPS position…";
   watchId = navigator.geolocation.watchPosition(async (position) => {
@@ -335,7 +403,7 @@ function startSharing(status, detail, button) {
     if (position.coords.accuracy > 120) { detail.textContent = `Waiting for better accuracy (${Math.round(position.coords.accuracy)} m)…`; return; }
     lastPosition = position;
     const meters = lastSentPosition ? distanceMeters(lastSentPosition.coords, position.coords) : Infinity;
-    const motion = (position.coords.speed || 0) >= 1.2 || meters >= 20 ? "moving" : "idle";
+    const motion = classifyMotion(position);
     const elapsed = now - lastSentAt;
     if (lastSentPosition && motion === lastMotionState) {
       if (motion === "moving" && elapsed < (config.driverLocationIntervalMs || 20000) && meters < 30) return;
@@ -344,7 +412,8 @@ function startSharing(status, detail, button) {
     lastSentAt = now;
     const { data, error } = await db.rpc("publish_driver_location", {
       p_lat: position.coords.latitude, p_lng: position.coords.longitude, p_accuracy: position.coords.accuracy,
-      p_speed: position.coords.speed, p_heading: position.coords.heading, p_sampled_at: new Date(position.timestamp).toISOString()
+      p_speed: position.coords.speed, p_heading: position.coords.heading, p_sampled_at: new Date(position.timestamp).toISOString(),
+      p_motion_state: motion
     });
     button.disabled = false;
     if (error) { detail.textContent = navigator.onLine ? "The location update failed. We will retry." : "Offline. The latest point will send when the connection returns."; return; }
@@ -355,6 +424,7 @@ function startSharing(status, detail, button) {
     button.textContent = "Turn location off";
   }, (error) => {
     button.disabled = false;
+    if (error.code === 1) localStorage.setItem(SHARING_KEY, "false");
     detail.textContent = error.code === 1 ? "Allow precise location in your browser settings." : "Could not get a GPS position. Try again outdoors.";
     notify(detail.textContent, "error");
   }, { enableHighAccuracy: true, maximumAge: 8000, timeout: 20000 });
@@ -372,11 +442,46 @@ async function stopSharing(remote = true, status, detail, button) {
   lastPosition = null;
   lastSentPosition = null;
   lastMotionState = "idle";
+  positionHistory = [];
+  movingEvidence = 0;
+  idleEvidence = 0;
+  if (remote) localStorage.setItem(SHARING_KEY, "false");
   if (remote && db) await db.rpc("stop_driver_location");
   if (status) status.textContent = "Location is off";
   if (detail) detail.textContent = "Passengers cannot see this vehicle until you turn location on.";
   if (button) { button.textContent = "Turn location on"; button.disabled = false; }
 }
+
+function classifyMotion(position) {
+  const now = position.timestamp || Date.now();
+  positionHistory.push(position);
+  positionHistory = positionHistory.filter((item) => now - (item.timestamp || now) <= 60000).slice(-6);
+  const reference = positionHistory.find((item) => now - (item.timestamp || now) >= 10000) || positionHistory[0];
+  const seconds = Math.max(1, (now - (reference.timestamp || now)) / 1000);
+  const traveled = reference === position ? 0 : distanceMeters(reference.coords, position.coords);
+  const uncertainty = Math.max(35, Math.min(120, Number(reference.coords.accuracy || 40) + Number(position.coords.accuracy || 40)));
+  const reportedSpeed = Number.isFinite(position.coords.speed) ? position.coords.speed : 0;
+  // Phone GPS can briefly report speed while stationary. Require sustained
+  // displacement as well as speed before switching to moving.
+  const speedHasTravel = seconds >= 10 && traveled >= Math.max(18, uncertainty * 0.35);
+  const distanceHasTravel = seconds >= 10 && traveled >= uncertainty && traveled / seconds >= 1.2;
+  const movingSignal = (reportedSpeed >= 2.2 && speedHasTravel) || distanceHasTravel;
+
+  if (movingSignal) {
+    movingEvidence += 1;
+    idleEvidence = 0;
+  } else {
+    idleEvidence += 1;
+    movingEvidence = 0;
+  }
+  if (lastMotionState === "idle" && movingEvidence >= 2) return "moving";
+  if (lastMotionState === "moving" && idleEvidence < 3) return "moving";
+  return "idle";
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && watchId != null) lastSentAt = 0;
+});
 
 function distanceMeters(a, b) {
   const lat = ((a.latitude + b.latitude) / 2) * Math.PI / 180;

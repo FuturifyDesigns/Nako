@@ -11,7 +11,6 @@ trackOnce("info_view");
 
 const button = document.querySelector("#install-button");
 const desktopNote = document.querySelector("#desktop-install-note");
-const driverButton = document.querySelector("#driver-register-button");
 const help = document.querySelector("#install-help");
 const handheld = isHandheld();
 
@@ -23,18 +22,10 @@ if (!handheld) {
     button.setAttribute("aria-hidden", "true");
   }
   if (desktopNote) desktopNote.hidden = false;
-  if (driverButton) {
-    driverButton.hidden = true;
-    driverButton.setAttribute("aria-hidden", "true");
-  }
   document.body.dataset.device = "desktop";
 } else {
   document.body.dataset.device = "handheld";
   if (desktopNote) desktopNote.hidden = true;
-  if (driverButton) {
-    driverButton.hidden = false;
-    driverButton.removeAttribute("aria-hidden");
-  }
   button?.addEventListener("click", async () => {
     await track("install_click");
     const outcome = await promptInstall();

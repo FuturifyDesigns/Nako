@@ -53,6 +53,7 @@ export async function mountPassenger(root) {
   root.append(shell);
 
   const langBtn = el("button", { type: "button", class: "lang-toggle", onclick: () => { toggleLang(); rebuildForm(); } });
+  const driverAccess = el("a", { class: "driver-access", href: "../driver/?mode=register" });
   const suggestionBox = el("div", { class: "suggestions", hidden: true });
   const zoneBlock = el("div", { class: "zone-block" });
   const routeSelect = el("select", { id: "route-select", "aria-label": "Route" });
@@ -85,7 +86,7 @@ export async function mountPassenger(root) {
   const pinBtn = el("button", { type: "button", class: "ghost", onclick: () => openResults({ pinFirst: true }) });
 
   form.append(
-    el("div", { class: "finder-top" }, [langBtn]),
+    el("div", { class: "finder-top" }, [driverAccess, langBtn]),
     title,
     lede,
     stepTransport,
@@ -112,6 +113,7 @@ export async function mountPassenger(root) {
 
   function rebuildForm() {
     langBtn.textContent = t("otherLang");
+    driverAccess.textContent = t("driverAccess");
     title.textContent = t("appTitle");
     lede.textContent = t("appLede");
     stepTransport.textContent = t("stepTransport");

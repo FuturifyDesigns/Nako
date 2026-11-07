@@ -29,6 +29,7 @@ if (splash && installed) {
 
 if (installed) {
   mountPassenger(document.querySelector("#app"));
+  showRoleChoice();
 } else {
   startSync();
   const handheldGate = document.querySelector("#gate-handheld");
@@ -62,4 +63,47 @@ if (installed) {
       if (help) help.hidden = false;
     });
   }
+}
+
+function showRoleChoice() {
+  const choiceKey = "nakolive-role-choice-v1";
+  if (localStorage.getItem(choiceKey)) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "role-choice-overlay";
+  overlay.innerHTML = `
+    <section class="role-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="role-choice-title">
+      <img src="../assets/icons/nako-logo.png?v=10" width="112" height="85" alt="">
+      <p class="role-choice-kicker">WELCOME TO NAKOLIVE</p>
+      <h1 id="role-choice-title"></h1>
+      <p class="role-choice-copy"></p>
+      <div class="role-choice-actions">
+        <button type="button" class="role-choice-option passenger-option">
+          <span class="role-choice-icon" aria-hidden="true">P</span>
+          <span><strong></strong><small></small></span>
+          <b aria-hidden="true">→</b>
+        </button>
+        <a class="role-choice-option driver-option" href="../driver/?mode=register&from=app">
+          <span class="role-choice-icon" aria-hidden="true">D</span>
+          <span><strong></strong><small></small></span>
+          <b aria-hidden="true">→</b>
+        </a>
+      </div>
+      <p class="role-choice-note">Driver registration is available inside the installed app.</p>
+    </section>`;
+
+  overlay.querySelector("#role-choice-title").textContent = t("chooseModeTitle");
+  overlay.querySelector(".role-choice-copy").textContent = t("chooseModeBody");
+  overlay.querySelector(".passenger-option strong").textContent = t("continuePassenger");
+  overlay.querySelector(".passenger-option small").textContent = t("passengerChoiceHint");
+  overlay.querySelector(".driver-option strong").textContent = t("registerDriver");
+  overlay.querySelector(".driver-option small").textContent = t("driverChoiceHint");
+  overlay.querySelector(".passenger-option").addEventListener("click", () => {
+    localStorage.setItem(choiceKey, "passenger");
+    overlay.classList.add("is-leaving");
+    window.setTimeout(() => overlay.remove(), 260);
+  });
+  overlay.querySelector(".driver-option").addEventListener("click", () => localStorage.setItem(choiceKey, "driver"));
+  document.body.append(overlay);
+  window.setTimeout(() => overlay.querySelector(".passenger-option")?.focus(), 1050);
 }

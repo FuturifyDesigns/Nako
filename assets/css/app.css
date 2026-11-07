@@ -58,6 +58,26 @@ html[data-mode="app"] .pwa-splash {
 .pwa-splash-dots i:nth-child(3) { animation-delay: .28s; }
 @keyframes splash-rise { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: none; } }
 @keyframes splash-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-5px); } }
+.role-choice-overlay { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; padding: 18px; background: rgba(4,20,39,.72); backdrop-filter: blur(10px); transition: opacity .24s ease, visibility .24s ease; }
+.role-choice-overlay.is-leaving { opacity: 0; visibility: hidden; }
+.role-choice-dialog { width: min(440px, 100%); max-height: calc(100vh - 36px); overflow: auto; padding: 25px; border: 1px solid rgba(255,255,255,.75); border-radius: 28px; background: #fff; box-shadow: 0 30px 90px rgba(0,15,40,.4); text-align: center; }
+.role-choice-dialog > img { width: 112px; height: auto; margin: 0 auto 5px; filter: drop-shadow(0 10px 15px rgba(18,47,89,.18)); }
+.role-choice-kicker { margin: 0 0 8px; color: var(--blue); font-size: 10px; font-weight: 900; letter-spacing: .14em; }
+.role-choice-dialog h1 { margin: 0; font-size: clamp(30px, 8vw, 42px); line-height: 1.05; }
+.role-choice-copy { margin: 11px auto 20px; max-width: 330px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.role-choice-actions { display: grid; gap: 10px; }
+.role-choice-option { width: 100%; min-height: 72px; display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 10px 13px; border: 1px solid var(--line); border-radius: 17px; background: #fff; color: var(--ink); text-align: left; text-decoration: none; }
+.role-choice-option:hover { border-color: #9dbce3; background: #f6faff; transform: translateY(-1px); }
+.role-choice-option.passenger-option { background: var(--blue); border-color: var(--blue); color: #fff; }
+.role-choice-option.passenger-option:hover { background: var(--blue-dark); }
+.role-choice-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: rgba(22,87,214,.1); color: var(--blue); font-weight: 900; }
+.passenger-option .role-choice-icon { background: rgba(255,255,255,.16); color: #fff; }
+.role-choice-option > span:nth-child(2) { display: grid; gap: 3px; }
+.role-choice-option strong { font-size: 14px; }
+.role-choice-option small { color: var(--muted); font-size: 11px; }
+.passenger-option small { color: rgba(255,255,255,.75); }
+.role-choice-option b { font-size: 20px; }
+.role-choice-note { margin: 15px 0 0; color: var(--muted); font-size: 11px; }
 body.driver-page {
   background:
     linear-gradient(180deg, rgba(5,39,79,.76), rgba(8,47,91,.45) 48%, rgba(5,25,49,.72)),
@@ -133,7 +153,9 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
   color: var(--ink);
   box-shadow: var(--shadow);
 }
-.finder-top { display: flex; justify-content: flex-end; gap: 8px; align-items: center; margin-bottom: 4px; }
+.finder-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 4px; }
+.driver-access { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: #f5f8fc; color: var(--muted); font-size: 11px; font-weight: 850; text-decoration: none; }
+.driver-access:hover { border-color: #9db9da; color: var(--blue); background: #eef5ff; }
 .lang-toggle {
   border: 1px solid var(--line);
   background: #fff;
@@ -642,4 +664,5 @@ html[data-mode="gate"] #app { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .radar { animation: none; }
   .pwa-splash img, .pwa-splash-dots i { animation: none; }
+  .role-choice-overlay, .role-choice-option { transition: none; }
 }

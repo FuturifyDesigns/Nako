@@ -410,11 +410,19 @@ function startSharing(status, detail, button) {
       if (motion === "idle" && elapsed < 90000) return;
     }
     lastSentAt = now;
-    const { data, error } = await db.rpc("publish_driver_location", {
+    const locationPayload = {
       p_lat: position.coords.latitude, p_lng: position.coords.longitude, p_accuracy: position.coords.accuracy,
       p_speed: position.coords.speed, p_heading: position.coords.heading, p_sampled_at: new Date(position.timestamp).toISOString(),
       p_motion_state: motion
-    });
+    };
+    let response = await db.rpc("publish_driver_location", locationPayload);
+    // Keep location sharing operational during a staged deployment where the
+    // database has not yet received the optional motion-state parameter.
+    if (response.error?.code === "PGRST202") {
+      const { p_motion_state, ...legacyPayload } = locationPayload;
+      response = await db.rpc("publish_driver_location", legacyPayload);
+    }
+    const { data, error } = response;
     button.disabled = false;
     if (error) { detail.textContent = navigator.onLine ? "The location update failed. We will retry." : "Offline. The latest point will send when the connection returns."; return; }
     lastSentPosition = position;

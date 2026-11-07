@@ -154,8 +154,10 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
   box-shadow: var(--shadow);
 }
 .finder-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 4px; }
-.driver-access { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: #f5f8fc; color: var(--muted); font-size: 11px; font-weight: 850; text-decoration: none; }
-.driver-access:hover { border-color: #9db9da; color: var(--blue); background: #eef5ff; }
+.driver-access { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 15px; border: 1px solid #0f4bc4; border-radius: 999px; background: linear-gradient(135deg, #1764e8, #124bb5); color: #fff; font-size: 12px; font-weight: 900; text-decoration: none; box-shadow: 0 9px 22px rgba(22,87,214,.26); transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+.driver-access::before { content: ""; width: 9px; height: 9px; flex: 0 0 auto; border: 2px solid rgba(255,255,255,.88); border-radius: 50%; background: #37d67a; box-shadow: 0 0 0 4px rgba(255,255,255,.13); }
+.driver-access:hover { color: #fff; background: linear-gradient(135deg, #0f55ce, #0b3e9d); box-shadow: 0 12px 28px rgba(22,87,214,.34); transform: translateY(-1px); }
+.driver-access:active { transform: translateY(0); }
 .lang-toggle {
   border: 1px solid var(--line);
   background: #fff;

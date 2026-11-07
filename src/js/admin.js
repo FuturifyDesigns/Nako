@@ -45,10 +45,8 @@ function renderLogin(root, client) {
   const email = el("input", { type: "email", required: "true", autocomplete: "username", placeholder: "admin@nako.bw", "aria-label": "Email" });
   const password = el("input", { type: "password", required: "true", autocomplete: "current-password", "aria-label": "Password" });
   const form = el("form", { class: "stack" }, [
-    el("label", { text: "Work email" }),
-    email,
-    el("label", { text: "Password" }),
-    password,
+    el("label", { class: "field-label" }, [el("span", { text: "Work email" }), email]),
+    el("label", { class: "field-label" }, [el("span", { text: "Password" }), password]),
     message,
     el("button", { class: "find", type: "submit", text: "Enter dashboard" })
   ]);
@@ -65,7 +63,7 @@ function renderLogin(root, client) {
     clear(root);
     renderDashboard(root, client);
   });
-  root.append(el("section", { class: "card admin-card" }, [
+  root.append(el("section", { class: "card admin-card admin-login-card" }, [
     brand(),
     el("h1", { text: "Association dashboard" }),
     el("p", { class: "lede", text: "Staff only. Passengers do not create accounts in this phase. This desk shows anonymous usage and the routes published to the finder." }),
@@ -92,42 +90,72 @@ function renderDashboard(root, client) {
   const applicationsPanel = el("div", { class: "panel wide" });
   let applicationsMounted = false;
   const notice = el("p", { class: "hint", text: "Loading usage…" });
+  const pageTitle = el("h1", { text: "Overview" });
+  const pageCopy = el("p", { text: "A simple view of usage across the NakoLive network." });
+  const overviewView = el("section", { class: "admin-view", "data-view": "overview" }, [
+    stats,
+    el("div", { class: "admin-split" }, [el("section", { class: "panel" }, [el("h2", { text: "Last 14 days" }), chart]), mix]),
+    el("div", { class: "admin-split" }, [cities, recent])
+  ]);
+  const driversView = el("section", { class: "admin-view", "data-view": "drivers", hidden: true }, [applicationsPanel]);
+  const routesView = el("section", { class: "admin-view", "data-view": "routes", hidden: true }, [routesPanel]);
+  const nav = el("nav", { class: "admin-nav", "aria-label": "Admin sections" });
+  const sections = {
+    overview: { label: "Overview", copy: "A simple view of usage across the NakoLive network.", icon: "01" },
+    drivers: { label: "Driver approvals", copy: "Review taxi, kombi and bus applications in separate queues.", icon: "02" },
+    routes: { label: "Route management", copy: "Publish and maintain the routes passengers can select.", icon: "03" }
+  };
+
+  function setView(view) {
+    for (const panel of [overviewView, driversView, routesView]) panel.hidden = panel.dataset.view !== view;
+    for (const button of nav.children) {
+      const active = button.dataset.view === view;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-current", active ? "page" : "false");
+    }
+    pageTitle.textContent = sections[view].label;
+    pageCopy.textContent = sections[view].copy;
+  }
+
+  for (const [view, section] of Object.entries(sections)) {
+    nav.append(el("button", { type: "button", class: `admin-nav-button${view === "overview" ? " is-active" : ""}`, "data-view": view, onclick: () => setView(view) }, [
+      el("span", { text: section.icon }), el("strong", { text: section.label })
+    ]));
+  }
   root.append(el("div", { class: "admin-shell" }, [
     el("aside", { class: "admin-side" }, [
-      brand(),
-      el("p", { text: "Usage and routes" }),
-      el("button", { type: "button", class: "ghost", onclick: async () => { await client.auth.signOut(); location.reload(); } }, ["Sign out"])
+      el("div", {}, [brand(), el("span", { class: "admin-portal-label", text: "ADMIN PORTAL" })]),
+      nav,
+      el("div", { class: "admin-side-foot" }, [
+        el("p", { text: "Secure staff access" }),
+        el("button", { type: "button", class: "ghost", onclick: async () => { await client.auth.signOut(); location.reload(); } }, ["Sign out"])
+      ])
     ]),
     el("main", { class: "admin-main" }, [
       el("header", { class: "admin-head" }, [
-        el("div", {}, [
-          el("h1", { text: "Overview" }),
-          el("p", { text: "Anonymous sessions only. Location coordinates are not stored." })
-        ]),
-        notice
+        el("div", {}, [pageTitle, pageCopy]),
+        el("div", { class: "admin-live-status" }, [el("span", { class: "live-dot", text: "Live" }), notice])
       ]),
-      stats,
-      el("div", { class: "admin-split" }, [el("section", { class: "panel" }, [el("h2", { text: "Last 14 days" }), chart]), mix]),
-      el("div", { class: "admin-split" }, [cities, recent]),
-      applicationsPanel,
-      routesPanel
+      overviewView,
+      driversView,
+      routesView
     ])
   ]));
 
   async function load() {
-    try {
-      const summary = await adminSummary() || EMPTY_SUMMARY;
-      paintSummary(summary, stats, chart, cities, recent, mix);
-      notice.textContent = "Live";
-    } catch (error) {
-      notice.textContent = navigator.onLine ? "Usage figures will appear after the first synced visits." : "Offline. Route edits will sync later.";
-      if (!stats.childElementCount) paintSummary(EMPTY_SUMMARY, stats, chart, cities, recent, mix);
-      console.warn(error);
-    }
     paintRoutes(routesPanel, client);
     if (!applicationsMounted) {
       applicationsMounted = true;
       paintApplications(applicationsPanel, client);
+    }
+    try {
+      const summary = await adminSummary() || EMPTY_SUMMARY;
+      paintSummary(summary, stats, chart, cities, recent, mix);
+      notice.textContent = "Updated now";
+    } catch (error) {
+      notice.textContent = navigator.onLine ? "Usage figures will appear after the first synced visits." : "Offline. Route edits will sync later.";
+      if (!stats.childElementCount) paintSummary(EMPTY_SUMMARY, stats, chart, cities, recent, mix);
+      console.warn(error);
     }
   }
 
@@ -202,6 +230,8 @@ function timeAgo(value) {
 function paintApplications(panel, client) {
   clear(panel);
   let activeType = "taxi";
+  const catalog = currentCatalog();
+  const routeNames = new Map(catalog.places.flatMap((place) => place.routes.map((route) => [route.id, `${place.name} — ${route.name}`])));
   const tabs = el("div", { class: "admin-tabs", role: "tablist" });
   const list = el("div", { class: "application-list" });
   panel.append(
@@ -213,9 +243,9 @@ function paintApplications(panel, client) {
   for (const type of ["taxi", "kombi", "bus"]) {
     tabs.append(el("button", {
       type: "button", role: "tab", class: `admin-tab${type === activeType ? " is-active" : ""}`,
-      text: type[0].toUpperCase() + type.slice(1), onclick: () => {
+      text: `${type[0].toUpperCase() + type.slice(1)} drivers`, onclick: () => {
         activeType = type;
-        for (const button of tabs.children) button.classList.toggle("is-active", button.textContent.toLowerCase() === type);
+        for (const button of tabs.children) button.classList.toggle("is-active", button.textContent.toLowerCase().startsWith(type));
         load();
       }
     }));
@@ -236,6 +266,10 @@ function paintApplications(panel, client) {
   }
 
   function applicationCard(profile) {
+    const routes = (profile.route_ids || []).map((id) => ({
+      name: id.startsWith("manual:") ? id.slice(7) : routeNames.get(id) || id,
+      manual: id.startsWith("manual:")
+    }));
     const message = el("textarea", { placeholder: "Reason and what the driver must correct", "aria-label": "Rejection reason" });
     const feedback = el("p", { class: "hint", hidden: true });
     async function review(status) {
@@ -251,7 +285,13 @@ function paintApplications(panel, client) {
         el("div", {}, [el("strong", { text: profile.full_name }), el("span", { text: `${profile.vehicle_description} · ${profile.plate}` })]),
         el("span", { class: "status-pill", text: profile.status })
       ]),
-      el("p", { text: `${profile.phone} · ${(profile.route_ids || []).length} registered route${(profile.route_ids || []).length === 1 ? "" : "s"}` }),
+      el("p", { class: "application-phone", text: profile.phone }),
+      el("div", { class: "application-routes" }, [
+        el("strong", { text: `Routes (${routes.length})` }),
+        el("div", { class: "application-route-chips" }, routes.length
+          ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "", text: route.manual ? `${route.name} · manual` : route.name }))
+          : [el("span", { text: "No routes supplied" })])
+      ]),
       message,
       el("div", { class: "row-actions" }, [
         el("button", { type: "button", class: "find compact", onclick: () => review("approved") }, ["Approve"]),
@@ -314,6 +354,9 @@ function paintRoutes(panel, client) {
 function openEditor(host, client, route, onDone) {
   clear(host);
   const catalog = currentCatalog();
+  const editorField = (label, control, hint = "") => el("label", { class: "field-label" }, [
+    el("span", { text: label }), control, hint ? el("small", { text: hint }) : null
+  ]);
   const placeSelect = el("select", { "aria-label": "Town" });
   placeSelect.append(el("option", { value: "", text: "Choose a town" }));
   for (const place of catalog.places) placeSelect.append(el("option", { value: place.id, text: place.name }));
@@ -378,15 +421,14 @@ function openEditor(host, client, route, onDone) {
   let map;
   host.append(el("form", { class: "stack editor-form" }, [
     el("h3", { text: route ? "Edit route" : "New route" }),
-    placeSelect,
+    editorField("Town or village", placeSelect),
     newPlace,
-    zoneSelect,
-    newZone,
-    name,
-    type,
-    origin,
-    destination,
-    summary,
+    el("div", { class: "form-grid" }, [editorField("Locality", zoneSelect), editorField("New locality (optional)", newZone)]),
+    editorField("Route name", name),
+    editorField("Transport type", type),
+    el("div", { class: "form-grid" }, [editorField("Route starts at", origin), editorField("Route ends at", destination)]),
+    editorField("Passenger description", summary, "Keep this short and easy to understand."),
+    el("div", { class: "editor-map-head" }, [el("strong", { text: "Route path" }), el("span", { text: "Tap the map in travel order" })]),
     mapBox,
     el("div", { class: "location-actions" }, [
       el("button", { type: "button", class: "ghost", onclick: () => { path.pop(); pathLabel.textContent = pathText(path); draw(); } }, ["Undo point"]),

@@ -182,35 +182,74 @@ function renderRegistration(user, existing) {
   const field = (label, input) => el("label", { class: "field-label" }, [el("span", { text: label }), input]);
   const fullName = el("input", { required: "true", minlength: "2", maxlength: "100", value: existing?.full_name || "", autocomplete: "name", placeholder: "Your full name" });
   const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || "", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
-  const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: value[0].toUpperCase() + value.slice(1), selected: existing?.transport_type === value ? "selected" : null })));
+  const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: `${value[0].toUpperCase() + value.slice(1)} driver`, selected: existing?.transport_type === value ? "selected" : null })));
   const vehicle = el("input", { required: "true", minlength: "2", maxlength: "120", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
   const plate = el("input", { required: "true", minlength: "2", maxlength: "30", pattern: "[A-Za-z0-9 -]{2,30}", value: existing?.plate || "", autocapitalize: "characters", placeholder: "B 123 ABC" });
-  const routes = el("select", { multiple: "true", required: "true", size: "7", "aria-label": "Routes" });
-  function fillRoutes() {
-    clear(routes);
-    const options = catalog.places.flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name }))).filter((route) => route.transport_type === type.value);
-    for (const route of options) routes.append(el("option", { value: route.id, text: `${route.placeName} — ${route.name}`, selected: existing?.route_ids?.includes(route.id) ? "selected" : null }));
+  const routeChoices = el("div", { class: "route-checkbox-list" });
+  const routeCount = el("span", { class: "route-count", role: "status" });
+  const existingOfficial = new Set((existing?.route_ids || []).filter((id) => !id.startsWith("manual:")));
+  const existingManual = (existing?.route_ids || []).filter((id) => id.startsWith("manual:")).map((id) => id.slice(7));
+  const manualRoutes = el("textarea", { rows: "4", maxlength: "900", placeholder: "Example:\nMain Mall to Block 8\nStation to Tlokweng Border", "aria-label": "Other routes" });
+  manualRoutes.value = existingManual.join("\n");
+
+  function updateRouteCount() {
+    const count = routeChoices.querySelectorAll('input[type="checkbox"]:checked').length;
+    routeCount.textContent = `${count} selected`;
   }
-  type.addEventListener("change", fillRoutes);
+
+  function fillRoutes(keepExisting = false) {
+    const selected = keepExisting
+      ? new Set([...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value))
+      : existingOfficial;
+    clear(routeChoices);
+    const options = catalog.places.flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name }))).filter((route) => route.transport_type === type.value);
+    for (const route of options) {
+      const checkbox = el("input", { type: "checkbox", value: route.id, checked: selected.has(route.id) });
+      checkbox.addEventListener("change", updateRouteCount);
+      routeChoices.append(el("label", { class: "route-checkbox" }, [
+        checkbox,
+        el("span", {}, [el("strong", { text: route.name }), el("small", { text: route.placeName })])
+      ]));
+    }
+    if (!options.length) routeChoices.append(el("p", { class: "hint", text: `No published ${type.value} routes yet. Enter the routes manually below.` }));
+    updateRouteCount();
+  }
+  type.addEventListener("change", () => fillRoutes(true));
   fillRoutes();
   const message = el("p", { class: "form-error", hidden: true });
   const submit = el("button", { class: "find", type: "submit", text: existing ? "Send corrected application" : "Send for verification" });
   const form = el("form", { class: "stack registration-form" }, [
-    field("Driver name", fullName), field("Phone number", phone), field("Transport role", type),
+    el("div", { class: "form-section" }, [
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Driver details" }), el("span", { text: "Required" })]),
+      field("Driver name", fullName), field("Phone number", phone), field("Transport role", type)
+    ]),
+    el("div", { class: "form-section" }, [
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Vehicle details" }), el("span", { text: "Required" })]),
     el("div", { class: "form-grid" }, [field("Car or vehicle", vehicle), field("Plate number", plate)]),
-    field("Routes handled (hold Ctrl to select more than one)", routes),
+    ]),
+    el("fieldset", { class: "form-section route-picker" }, [
+      el("legend", { text: "Routes handled" }),
+      el("div", { class: "form-section-head route-picker-head" }, [el("p", { text: "Tick every published route you drive." }), routeCount]),
+      routeChoices,
+      field("Other routes — one per line (optional)", manualRoutes),
+      el("p", { class: "hint", text: "You can select several checkboxes, enter several routes manually, or use both." })
+    ]),
     el("p", { class: "privacy-hint" }, ["See how we use and protect your information in our ", el("a", { href: "../privacy/", text: "Privacy Notice" }), "."]),
     message, submit
   ]);
-  for (const input of [fullName, phone, type, vehicle, plate, routes]) {
+  for (const input of [fullName, phone, type, vehicle, plate, manualRoutes]) {
     input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
     input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
     input.addEventListener("change", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
   }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!form.reportValidity()) {
-      message.textContent = "Please complete every required field and select at least one route.";
+    const selectedRoutes = [...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+    const typedRoutes = [...new Map(manualRoutes.value.split(/[\n,;]+/).map((route) => route.trim().replace(/\s+/g, " ")).filter(Boolean).map((route) => [route.toLowerCase(), route])).values()].slice(0, 12);
+    if (!form.reportValidity() || (!selectedRoutes.length && !typedRoutes.length)) {
+      message.textContent = !selectedRoutes.length && !typedRoutes.length
+        ? "Select at least one route or enter a route manually."
+        : "Please complete every required field.";
       message.hidden = false;
       return;
     }
@@ -220,7 +259,7 @@ function renderRegistration(user, existing) {
     const row = {
       user_id: user.id, full_name: fullName.value.trim(), phone: phone.value.trim(), transport_type: type.value,
       vehicle_description: vehicle.value.trim(),
-      plate: plate.value.trim().toUpperCase(), route_ids: [...routes.selectedOptions].map((option) => option.value),
+      plate: plate.value.trim().toUpperCase(), route_ids: [...selectedRoutes, ...typedRoutes.map((route) => `manual:${route}`)],
       status: "pending", rejection_message: null, reviewed_at: null, reviewed_by: null
     };
     const { error } = await db.from("driver_profiles").upsert(row);
@@ -236,7 +275,19 @@ function renderRegistration(user, existing) {
   shell(existing ? "Correct your application" : "Driver registration", intro, user);
 }
 
+function routeLabels(routeIds = []) {
+  const official = new Map(currentCatalog().places.flatMap((place) => place.routes.map((route) => [route.id, `${place.name} — ${route.name}`])));
+  return routeIds.map((id) => id.startsWith("manual:") ? id.slice(7) : official.get(id) || id);
+}
+
 function renderApproved(user, profile) {
+  const roles = {
+    taxi: { title: "Taxi driver console", kicker: "TAXI OPERATIONS", image: "taxi.png", copy: "Go visible when you are available so nearby passengers can find your taxi." },
+    kombi: { title: "Kombi driver console", kicker: "KOMBI OPERATIONS", image: "kombi.png", copy: "Share your position while operating so passengers can see your kombi along its routes." },
+    bus: { title: "Bus driver console", kicker: "BUS OPERATIONS", image: "bus.png", copy: "Share your position during service so passengers can see your bus and movement status." }
+  };
+  const role = roles[profile.transport_type] || roles.taxi;
+  const assignedRoutes = routeLabels(profile.route_ids);
   const status = el("strong", { class: "share-state", text: "Location is off" });
   const detail = el("p", { class: "hint", text: "Passengers cannot see this vehicle until you turn location on." });
   const consent = el("input", { type: "checkbox", id: "location-consent" });
@@ -260,10 +311,18 @@ function renderApproved(user, profile) {
     }
     startSharing(status, detail, button);
   });
-  shell("You are approved", [
-    el("div", { class: "approval-pop" }, [el("strong", { text: "You can use NakoLive now" }), el("p", { text: "Turn on location only while you are operating. NakoLive sends moving updates in short intervals and slows down while idle to reduce data use." })]),
-    el("div", { class: "status-panel approved" }, [el("strong", { text: `${profile.transport_type.toUpperCase()} · ${profile.vehicle_description}` }), el("p", { text: profile.plate })]),
-    status, detail, consentLabel, button
+  shell(role.title, [
+    el("section", { class: `driver-role-hero role-${profile.transport_type}` }, [
+      el("div", {}, [el("p", { class: "driver-role-kicker", text: role.kicker }), el("strong", { text: profile.vehicle_description }), el("span", { text: profile.plate })]),
+      el("img", { src: `../assets/vehicles/${role.image}`, alt: "", width: "150", height: "96" })
+    ]),
+    el("p", { class: "driver-role-copy", text: role.copy }),
+    el("div", { class: "approval-pop" }, [el("strong", { text: "Approved and ready" }), el("p", { text: "Turn on location only while you are operating. Updates are delayed slightly to reduce data use." })]),
+    el("section", { class: "driver-route-summary" }, [
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Your routes" }), el("span", { text: `${assignedRoutes.length} total` })]),
+      el("div", { class: "driver-route-chips" }, assignedRoutes.length ? assignedRoutes.map((route) => el("span", { text: route })) : [el("p", { class: "hint", text: "No routes saved." })])
+    ]),
+    el("section", { class: "driver-share-panel" }, [status, detail, consentLabel, button])
   ], user);
 }
 

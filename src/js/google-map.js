@@ -55,11 +55,27 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
     maps.event.addListenerOnce(native, "tilesloaded", () => finish(resolve));
     const timer = window.setTimeout(() => finish(() => reject(new Error("Google Maps tiles timed out"))), 7000);
   });
+  let pendingCameraOffset = null;
   return {
     native,
     easeTo(options = {}) {
-      if (options.center) native.panTo({ lat: options.center[1], lng: options.center[0] });
+      if (pendingCameraOffset) {
+        maps.event.removeListener(pendingCameraOffset);
+        pendingCameraOffset = null;
+      }
       if (options.zoom) native.setZoom(options.zoom);
+      if (options.center) {
+        native.panTo({ lat: options.center[1], lng: options.center[0] });
+        const padding = options.padding;
+        if (padding) {
+          const offsetX = ((padding.right || 0) - (padding.left || 0)) / 2;
+          const offsetY = ((padding.bottom || 0) - (padding.top || 0)) / 2;
+          pendingCameraOffset = maps.event.addListenerOnce(native, "idle", () => {
+            pendingCameraOffset = null;
+            if (Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1) native.panBy(offsetX, offsetY);
+          });
+        }
+      }
     },
     getCenter() {
       const point = native.getCenter();

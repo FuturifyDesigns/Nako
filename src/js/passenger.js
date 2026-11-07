@@ -638,9 +638,24 @@ export async function mountPassenger(root) {
     function selectVehicle(vehicle) {
       state.selectedVehicle = vehicle.id;
       layer?.setSelected(vehicle.id);
-      map?.easeTo({ center: [vehicle.lng, vehicle.lat], zoom: 16.1, duration: 450 });
       fillSheet(activeRoute());
       setSheetHidden(false);
+      const mobileSheetHeight = Math.min(window.innerHeight * 0.62, 560) + 20;
+      const selectionPadding = window.innerWidth >= 900
+        ? { top: 92, bottom: 20, left: 420, right: 24 }
+        : { top: 76, bottom: mobileSheetHeight, left: 24, right: 24 };
+      // Reset the route camera's old padding and focus the exact live marker.
+      // Without this, the retained bottom-sheet padding can make a marker click
+      // appear to pan to a different point.
+      map?.easeTo({
+        center: [Number(vehicle.lng), Number(vehicle.lat)],
+        zoom: 16.1,
+        pitch: 0,
+        bearing: 0,
+        padding: selectionPadding,
+        retainPadding: false,
+        duration: 350
+      });
     }
 
     function activeRoute() { return currentRoute; }

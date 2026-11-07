@@ -71,6 +71,15 @@ function renderAuth() {
   mode.value = new URLSearchParams(location.search).get("mode") === "register" ? "register" : "login";
   const email = el("input", { type: "email", required: "true", autocomplete: "email", placeholder: "driver@example.com", maxlength: "160" });
   const password = el("input", { type: "password", required: "true", minlength: "8", autocomplete: "current-password", placeholder: "Enter your password" });
+  const passwordToggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
+  const passwordInput = el("div", { class: "password-input-wrap" }, [password, passwordToggle]);
+  passwordToggle.addEventListener("click", () => {
+    const showing = password.type === "text";
+    password.type = showing ? "password" : "text";
+    passwordToggle.textContent = showing ? "Show" : "Hide";
+    passwordToggle.setAttribute("aria-pressed", showing ? "false" : "true");
+    password.focus();
+  });
   const strengthBars = el("div", { class: "strength-bars", "aria-hidden": "true" }, [0, 1, 2, 3, 4].map(() => el("span")));
   const strengthText = el("strong", { text: "Password strength" });
   const strength = el("div", { class: "password-strength", hidden: true, role: "status" }, [
@@ -85,7 +94,7 @@ function renderAuth() {
     el("a", { href: "../privacy/", text: "Privacy & data protection notice" }),
     "."
   ]);
-  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", password), strength, privacyNote, message, button]);
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", passwordInput), strength, privacyNote, message, button]);
 
   function passwordScore(value) {
     if (!value) return 0;
@@ -173,6 +182,11 @@ async function renderDriver(user) {
 
 function shell(title, body, user) {
   clear(root);
+  const passenger = el("a", {
+    class: "driver-passenger-link",
+    href: "../app/",
+    onclick: () => localStorage.setItem(ROLE_CHOICE_KEY, "passenger")
+  }, ["Passenger interface"]);
   const signOut = el("button", { type: "button", class: "driver-signout", onclick: async () => {
     await stopSharing(true);
     localStorage.setItem(ROLE_CHOICE_KEY, "passenger");
@@ -180,7 +194,7 @@ function shell(title, body, user) {
     renderAuth();
   } }, ["Sign out"]);
   root.append(el("section", { class: "card admin-card driver-card" }, [
-    el("div", { class: "driver-shell-head" }, [brand(), signOut]),
+    el("div", { class: "driver-shell-head" }, [brand(), el("div", { class: "driver-shell-actions" }, [passenger, signOut])]),
     el("h1", { text: title }), ...body
   ]));
 }

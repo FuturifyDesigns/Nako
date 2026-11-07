@@ -28,9 +28,18 @@ function renderLogin(root, client) {
   const message = el("p", { class: "form-error", hidden: true });
   const email = el("input", { type: "email", required: "true", autocomplete: "username", placeholder: "admin@nako.bw", "aria-label": "Email" });
   const password = el("input", { type: "password", required: "true", autocomplete: "current-password", "aria-label": "Password" });
+  const passwordToggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
+  const passwordInput = el("div", { class: "password-input-wrap" }, [password, passwordToggle]);
+  passwordToggle.addEventListener("click", () => {
+    const showing = password.type === "text";
+    password.type = showing ? "password" : "text";
+    passwordToggle.textContent = showing ? "Show" : "Hide";
+    passwordToggle.setAttribute("aria-pressed", showing ? "false" : "true");
+    password.focus();
+  });
   const form = el("form", { class: "stack" }, [
     el("label", { class: "field-label" }, [el("span", { text: "Work email" }), email]),
-    el("label", { class: "field-label" }, [el("span", { text: "Password" }), password]),
+    el("label", { class: "field-label" }, [el("span", { text: "Password" }), passwordInput]),
     message,
     el("button", { class: "find", type: "submit", text: "Enter dashboard" })
   ]);

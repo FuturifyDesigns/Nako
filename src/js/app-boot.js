@@ -11,13 +11,6 @@ const handheld = isHandheld();
 const installed = isStandalone() || document.documentElement.dataset.mode === "app";
 const splash = document.querySelector("#pwa-splash");
 const roleChoiceKey = "nakolive-role-choice-v1";
-const reopeningAsDriver = installed && localStorage.getItem(roleChoiceKey) === "driver";
-
-// Keep an installed app in the last role selected. Supabase persists the
-// authenticated session; this route returns signed-in drivers to their console.
-if (reopeningAsDriver) {
-  location.replace("../driver/?from=app");
-}
 
 if (splash && installed) {
   let dismissed = false;
@@ -35,9 +28,7 @@ if (splash && installed) {
   splash?.remove();
 }
 
-if (reopeningAsDriver) {
-  // Navigation is already in progress; do not mount either interface underneath it.
-} else if (installed) {
+if (installed) {
   mountPassenger(document.querySelector("#app"));
   showRoleChoice();
 } else {

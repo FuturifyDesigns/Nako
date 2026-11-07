@@ -572,6 +572,10 @@ html[data-mode="gate"] #app { display: none; }
 .route-checkbox strong { font-size: 13px; }
 .route-checkbox small { color: var(--muted); font-size: 11px; }
 .auth-form { margin-top: 16px; }
+.password-input-wrap { position: relative; width: 100%; }
+.password-input-wrap input { width: 100%; padding-right: 76px !important; }
+.password-toggle { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); min-width: 56px; min-height: 34px; padding: 0 10px; border: 1px solid #cbd8e7; border-radius: 10px; background: #f2f6fb; color: #244766; font-size: 12px; font-weight: 850; }
+.password-toggle:hover { background: #e8f1fb; border-color: #9fb6cf; }
 .password-strength { display: grid; gap: 7px; padding: 10px 12px; border-radius: 14px; background: #f4f7fb; border: 1px solid var(--line); }
 .strength-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 12px; }
 .strength-label { color: var(--muted); font-weight: 800; }
@@ -650,7 +654,10 @@ html[data-mode="gate"] #app { display: none; }
 .driver-role-copy { margin: 0; color: var(--muted); line-height: 1.55; }
 .driver-route-summary, .driver-share-panel { display: grid; gap: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 17px; background: #fff; }
 .driver-share-panel .find { margin-top: 2px; }
-.driver-shell-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.driver-shell-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.driver-shell-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin-left: auto; }
+.driver-passenger-link { display: inline-flex; min-height: 38px; align-items: center; padding: 0 12px; border: 1px solid #9fc5ef; border-radius: 999px; background: #eaf4ff; color: #155ba4; font-size: 12px; font-weight: 850; text-decoration: none; }
+.driver-passenger-link:hover { border-color: #6fa9e7; background: #dceeff; }
 .driver-signout { min-height: 38px; padding: 0 13px; border: 1px solid #cbd8e7; border-radius: 999px; background: #f4f7fb; color: #42546a; font-size: 12px; font-weight: 850; }
 .driver-signout:hover { border-color: #9fb5ce; background: #eaf1f8; color: #173b66; }
 .background-location-note { margin: 0; padding: 10px 12px; border-radius: 13px; background: #eef5ff; color: #35536f; font-size: 11px; line-height: 1.45; }

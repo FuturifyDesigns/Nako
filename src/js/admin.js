@@ -2,22 +2,6 @@ import { el, clear } from "./dom.js";
 import { suggestPlaces } from "./geo.js";
 import { adminSummary, currentCatalog, onSync, refreshCatalog, savePlace, saveRoute, saveZone, setRouteActive, slugify, startSync, supabaseClient } from "./sync.js";
 
-const EMPTY_SUMMARY = {
-  sessions_total: 0,
-  sessions_today: 0,
-  sessions_7d: 0,
-  searches_today: 0,
-  searches_7d: 0,
-  opens_today: 0,
-  install_clicks_7d: 0,
-  pwa_sessions: 0,
-  by_day: [],
-  top_cities: [],
-  top_routes: [],
-  transport_mix: { taxi: 0, kombi: 0, bus: 0 },
-  recent: []
-};
-
 export async function mountAdmin(root) {
   const client = supabaseClient();
   await startSync();
@@ -90,11 +74,12 @@ function renderDashboard(root, client) {
   const applicationsPanel = el("div", { class: "panel wide" });
   let applicationsMounted = false;
   const notice = el("p", { class: "hint", text: "Loading usage…" });
+  const liveState = el("span", { class: "live-dot", text: "Live" });
   const pageTitle = el("h1", { text: "Overview" });
   const pageCopy = el("p", { text: "A simple view of usage across the NakoLive network." });
   const overviewView = el("section", { class: "admin-view", "data-view": "overview" }, [
     stats,
-    el("div", { class: "admin-split" }, [el("section", { class: "panel" }, [el("h2", { text: "Last 14 days" }), chart]), mix]),
+    el("div", { class: "admin-split" }, [el("section", { class: "panel" }, [el("h2", { text: "Searches · last 14 days" }), chart]), mix]),
     el("div", { class: "admin-split" }, [cities, recent])
   ]);
   const driversView = el("section", { class: "admin-view", "data-view": "drivers", hidden: true }, [applicationsPanel]);
@@ -134,7 +119,7 @@ function renderDashboard(root, client) {
     el("main", { class: "admin-main" }, [
       el("header", { class: "admin-head" }, [
         el("div", {}, [pageTitle, pageCopy]),
-        el("div", { class: "admin-live-status" }, [el("span", { class: "live-dot", text: "Live" }), notice])
+        el("div", { class: "admin-live-status" }, [liveState, notice])
       ]),
       overviewView,
       driversView,
@@ -149,12 +134,17 @@ function renderDashboard(root, client) {
       paintApplications(applicationsPanel, client);
     }
     try {
-      const summary = await adminSummary() || EMPTY_SUMMARY;
+      const summary = await adminSummary();
+      if (!summary || typeof summary !== "object") throw new Error("Supabase returned no usage summary.");
       paintSummary(summary, stats, chart, cities, recent, mix);
+      liveState.textContent = "Live";
+      liveState.classList.remove("is-error");
       notice.textContent = "Updated now";
     } catch (error) {
-      notice.textContent = navigator.onLine ? "Usage figures will appear after the first synced visits." : "Offline. Route edits will sync later.";
-      if (!stats.childElementCount) paintSummary(EMPTY_SUMMARY, stats, chart, cities, recent, mix);
+      liveState.textContent = "Unavailable";
+      liveState.classList.add("is-error");
+      notice.textContent = navigator.onLine ? "Could not load live usage" : "Offline";
+      paintSummaryUnavailable(stats, chart, cities, recent, mix);
       console.warn(error);
     }
   }
@@ -168,11 +158,26 @@ function stat(label, value) {
   return el("article", { class: "stat" }, [el("span", { text: label }), el("strong", { text: String(value ?? 0) })]);
 }
 
+function paintSummaryUnavailable(stats, chart, cities, recent, mix) {
+  clear(stats);
+  stats.append(el("article", { class: "stat data-unavailable" }, [
+    el("span", { text: "Live usage unavailable" }),
+    el("strong", { text: "—" }),
+    el("p", { class: "hint", text: "No substitute or cached figures are being shown." })
+  ]));
+  clear(chart);
+  chart.append(el("p", { class: "hint", text: "Search activity will return when the live Supabase connection is available." }));
+  for (const [panel, title] of [[cities, "Towns people search"], [recent, "Recent activity"], [mix, "Transport searches · 30 days"]]) {
+    clear(panel);
+    panel.append(el("h2", { text: title }), el("p", { class: "hint", text: "Live data unavailable." }));
+  }
+}
+
 function paintSummary(summary, stats, chart, cities, recent, mix) {
   clear(stats);
   stats.append(
-    stat("People", summary.sessions_total),
-    stat("People today", summary.sessions_today),
+    stat("Unique app sessions", summary.sessions_total),
+    stat("Sessions today", summary.sessions_today),
     stat("Searches today", summary.searches_today),
     stat("Searches, 7 days", summary.searches_7d),
     stat("App opens today", summary.opens_today),
@@ -209,7 +214,7 @@ function paintSummary(summary, stats, chart, cities, recent, mix) {
   }
 
   clear(mix);
-  mix.append(el("h2", { text: "Transport mix" }));
+  mix.append(el("h2", { text: "Transport searches · 30 days" }));
   const transport = summary.transport_mix || {};
   for (const key of ["kombi", "taxi", "bus"]) {
     mix.append(el("p", { class: "row" }, [el("strong", { text: key }), el("span", { text: String(transport[key] || 0) })]));

@@ -461,11 +461,14 @@ function classifyMotion(position) {
   const traveled = reference === position ? 0 : distanceMeters(reference.coords, position.coords);
   const uncertainty = Math.max(35, Math.min(120, Number(reference.coords.accuracy || 40) + Number(position.coords.accuracy || 40)));
   const reportedSpeed = Number.isFinite(position.coords.speed) ? position.coords.speed : 0;
-  // Phone GPS can briefly report speed while stationary. Require sustained
-  // displacement as well as speed before switching to moving.
-  const speedHasTravel = seconds >= 10 && traveled >= Math.max(18, uncertainty * 0.35);
+  const currentAccuracy = Number(position.coords.accuracy || 999);
+  // A reliable driving-speed reading counts immediately as evidence. With a
+  // weaker signal, require matching displacement so ordinary GPS drift cannot
+  // make a parked driver alternate between Idle and On the move.
+  const reliableDrivingSpeed = reportedSpeed >= 2 && currentAccuracy <= 65;
+  const speedHasTravel = reportedSpeed >= 2 && seconds >= 10 && traveled >= Math.max(12, uncertainty * 0.25);
   const distanceHasTravel = seconds >= 10 && traveled >= uncertainty && traveled / seconds >= 1.2;
-  const movingSignal = (reportedSpeed >= 2.2 && speedHasTravel) || distanceHasTravel;
+  const movingSignal = reliableDrivingSpeed || speedHasTravel || distanceHasTravel;
 
   if (movingSignal) {
     movingEvidence += 1;

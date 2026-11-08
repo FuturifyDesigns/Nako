@@ -92,7 +92,7 @@ const STRINGS = {
     builtBy: "built by",
     // App
     appTitle: "Where to?",
-    driverAccess: "Driver access",
+    driverAccess: "Driver login",
     chooseModeTitle: "How will you use NakoLive?",
     chooseModeBody: "Choose how you want to begin. You can switch later from the app.",
     continuePassenger: "Continue as passenger",
@@ -259,7 +259,7 @@ const STRINGS = {
     copyright: "© 2026 NakoLive. Ditshwanelo tsotlhe di sireleditswe.",
     builtBy: "e agilwe ke",
     appTitle: "O ya kae?",
-    driverAccess: "Bakgweetsi",
+    driverAccess: "Tsena jaaka mokgweetsi",
     chooseModeTitle: "O tla dirisa NakoLive jang?",
     chooseModeBody: "Tlhopha gore o batla go simolola jang. O ka fetola moragonyana mo app.",
     continuePassenger: "Tswelela jaaka mopalangwa",

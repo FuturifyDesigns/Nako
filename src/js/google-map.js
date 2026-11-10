@@ -125,6 +125,7 @@ const ICONS = {
 export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   const markers = new Map();
   let selected = null;
+  let highlightedRoute = "all";
   const zoomListener = globalThis.google.maps.event.addListener(mapAdapter.native, "zoom_changed", () => {
     for (const marker of markers.values()) {
       if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
@@ -174,14 +175,16 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
       }
       marker.nakoVehicle = vehicle;
       moveMarker(marker, vehicle);
-      marker.setZIndex(vehicle.id === selected ? 100 : 10);
-      marker.setOpacity(vehicle.id === selected ? 1 : 0.9);
+      const routeMatch = highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute);
+      marker.setZIndex(vehicle.id === selected ? 100 : routeMatch ? 20 : 10);
+      marker.setOpacity(vehicle.id === selected || routeMatch ? 1 : 0.34);
     }
   }
   let latest = [];
   return {
     setVehicles(vehicles) { latest = vehicles || []; sync(latest); },
     setSelected(id) { selected = id; sync(latest); },
+    setHighlightedRoute(id) { highlightedRoute = id || "all"; sync(latest); },
     clear() {
       globalThis.google.maps.event.removeListener(zoomListener);
       for (const marker of markers.values()) {

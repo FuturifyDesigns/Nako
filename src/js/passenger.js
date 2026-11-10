@@ -560,6 +560,11 @@ export async function mountPassenger(root) {
       clear(sheetBody);
       const best = working[0];
       const offer = best && current && best.route.id !== current.id;
+      const displayedFleet = [...state.fleet].sort((a, b) => {
+        const aMatch = current && (a.routeIds || []).includes(current.id) ? 1 : 0;
+        const bMatch = current && (b.routeIds || []).includes(current.id) ? 1 : 0;
+        return bMatch - aMatch || (a.distance ?? Infinity) - (b.distance ?? Infinity);
+      });
       const banner = offer && state.pointSource === "gps" && !state.hideRecommend ? el("div", { class: "recommend in-sheet" }, [
         el("p", { text: t("closerOption", { name: best.route.name, distance: formatDistance(best.distance) }) }),
         el("button", { type: "button", class: "text-button", onclick: () => {
@@ -581,17 +586,18 @@ export async function mountPassenger(root) {
         el("h2", { text: current ? current.name : t("routesCanBeAdded") }),
         el("p", { class: "sheet-copy", text: current?.summary || t("nothingPublished") }),
         banner,
-        el("div", { class: "vehicle-list" }, state.fleet.map((vehicle) => {
+        el("div", { class: "vehicle-list" }, displayedFleet.map((vehicle) => {
           const selected = state.selectedVehicle === vehicle.id;
+          const routeMatch = current && (vehicle.routeIds || []).includes(current.id);
           const lastSeen = vehicle.sampledAt ? new Date(vehicle.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now";
-          return el("div", { class: `vehicle-block${selected ? " is-selected" : ""}` }, [
+          return el("div", { class: `vehicle-block${selected ? " is-selected" : ""}${routeMatch ? " is-route-match" : ""}` }, [
             el("button", {
               type: "button",
               class: `vehicle${selected ? " is-selected" : ""}`,
               onclick: () => selectVehicle(vehicle)
             }, [
               el("strong", { text: `${labelFor(vehicle.type)} · ${vehicle.plate}` }),
-              el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}` })
+              el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}${routeMatch ? " · Selected route" : ""}` })
             ]),
             selected ? el("div", { class: "vehicle-details" }, [
               el("span", { class: `vehicle-status${vehicle.state === "moving" ? " is-moving" : ""}`, text: statusLabel(vehicle.state) }),
@@ -655,6 +661,7 @@ export async function mountPassenger(root) {
       currentRoute = route;
       state.routeId = route.id;
       state.selectedVehicle = null;
+      layer?.setHighlightedRoute(route.id);
       fillSheet(route);
       focusMap(route);
       startFleetWatch();
@@ -669,6 +676,7 @@ export async function mountPassenger(root) {
           if (state.selectedVehicle && !vehicles.some((vehicle) => vehicle.id === state.selectedVehicle)) state.selectedVehicle = null;
           layer?.setVehicles(vehicles);
           layer?.setSelected(state.selectedVehicle);
+          layer?.setHighlightedRoute(currentRoute?.id || "all");
           fillSheet(currentRoute);
           if (!["gps", "pin", "typed"].includes(state.pointSource) && vehicles.length && map && !fleetCameraSet) {
             focusMap(currentRoute);
@@ -680,7 +688,8 @@ export async function mountPassenger(root) {
     function focusMap(route) {
       if (!map) return;
       const explicitPassengerPoint = ["gps", "pin", "typed"].includes(state.pointSource) ? state.point : null;
-      const spot = explicitPassengerPoint || state.fleet[0] || route?.path?.[0] || focusPoint();
+      const routeVehicle = route ? state.fleet.find((vehicle) => (vehicle.routeIds || []).includes(route.id)) : null;
+      const spot = explicitPassengerPoint || routeVehicle || state.fleet[0] || route?.path?.[0] || focusPoint();
       if (!spot) return;
       if (!explicitPassengerPoint && state.fleet.length) fleetCameraSet = true;
       const length = route?.path?.reduce((sum, spotItem, index) => index ? sum + haversine(route.path[index - 1], spotItem) : 0, 0) || 0;
@@ -765,6 +774,7 @@ export async function mountPassenger(root) {
         });
         layer.setVehicles(state.fleet);
         layer.setSelected(state.selectedVehicle);
+        layer.setHighlightedRoute(currentRoute?.id || "all");
         paintPassengerPoint();
         focusMap(active || { path: [point || focusPoint()] });
         const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;
@@ -783,6 +793,7 @@ export async function mountPassenger(root) {
         layer = createGoogleVehicleLayer(map, { onSelect: (vehicle) => selectVehicle(vehicle) });
         layer.setVehicles(state.fleet);
         layer.setSelected(state.selectedVehicle);
+        layer.setHighlightedRoute(currentRoute?.id || "all");
         paintPassengerPoint();
         focusMap(active || { path: [center] });
         const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;

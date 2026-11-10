@@ -29,6 +29,44 @@ function manualRouteId(type, name) {
   return `manual:${type}:${name}`;
 }
 
+function normalizeRouteName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function routesForType(catalog, type) {
+  return catalog.places
+    .flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name })))
+    .filter((route) => route.transport_type === type);
+}
+
+function splitRouteNames(value) {
+  return [...new Map(String(value || "").split(/[\n,;]+/)
+    .map((route) => route.trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .map((route) => [normalizeRouteName(route), route])).values()].slice(0, 12);
+}
+
+function resolveSharedRoutes(catalog, type, selectedIds, typedNames) {
+  const byName = new Map(routesForType(catalog, type).map((route) => [normalizeRouteName(route.name), route]));
+  const shared = new Set(selectedIds);
+  const newNames = [];
+  const matched = [];
+  for (const name of typedNames) {
+    const existing = byName.get(normalizeRouteName(name));
+    if (existing) {
+      shared.add(existing.id);
+      matched.push(existing);
+    } else {
+      newNames.push(name);
+    }
+  }
+  return { ids: [...shared, ...newNames.map((name) => manualRouteId(type, name))], matched, newNames };
+}
+
 function normalizePhone(value) {
   let digits = String(value || "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
@@ -284,6 +322,7 @@ function renderRegistration(user, existing) {
   const existingManual = (existing?.route_ids || []).filter((id) => id.startsWith("manual:")).map(manualRouteName);
   const manualRoutes = el("textarea", { rows: "4", maxlength: "900", placeholder: "Example:\nMain Mall to Block 8\nStation to Tlokweng Border", "aria-label": "Other routes" });
   manualRoutes.value = existingManual.join("\n");
+  const sharedRouteHint = el("p", { class: "route-existing-hint", hidden: true, role: "status" });
 
   function updateRouteCount() {
     const count = routeChoices.querySelectorAll('input[type="checkbox"]:checked').length;
@@ -295,7 +334,7 @@ function renderRegistration(user, existing) {
       ? new Set([...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value))
       : existingOfficial;
     clear(routeChoices);
-    const options = catalog.places.flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name }))).filter((route) => route.transport_type === type.value);
+    const options = routesForType(catalog, type.value);
     for (const route of options) {
       const checkbox = el("input", { type: "checkbox", value: route.id, checked: selected.has(route.id) });
       checkbox.addEventListener("change", updateRouteCount);
@@ -307,8 +346,23 @@ function renderRegistration(user, existing) {
     if (!options.length) routeChoices.append(el("p", { class: "hint", text: `No published ${type.value} routes yet. Enter the routes manually below.` }));
     updateRouteCount();
   }
+  function linkExistingTypedRoutes() {
+    const resolved = resolveSharedRoutes(catalog, type.value, [], splitRouteNames(manualRoutes.value));
+    for (const route of resolved.matched) {
+      const checkbox = [...routeChoices.querySelectorAll('input[type="checkbox"]')].find((input) => input.value === route.id);
+      if (checkbox) checkbox.checked = true;
+    }
+    sharedRouteHint.hidden = !resolved.matched.length;
+    sharedRouteHint.textContent = resolved.matched.length
+      ? `${resolved.matched.map((route) => `“${route.name}”`).join(", ")} already ${resolved.matched.length === 1 ? "exists" : "exist"}. The shared route ${resolved.matched.length === 1 ? "has" : "have"} been selected instead of creating a duplicate.`
+      : "";
+    updateRouteCount();
+  }
   type.addEventListener("change", () => fillRoutes(true));
+  type.addEventListener("change", linkExistingTypedRoutes);
+  manualRoutes.addEventListener("input", linkExistingTypedRoutes);
   fillRoutes();
+  linkExistingTypedRoutes();
   const message = el("p", { class: "form-error", hidden: true });
   const submit = el("button", { class: "find", type: "submit", text: existing ? "Send corrected application" : "Send for verification" });
   const form = el("form", { class: "stack registration-form" }, [
@@ -325,6 +379,7 @@ function renderRegistration(user, existing) {
       el("div", { class: "form-section-head route-picker-head" }, [el("p", { text: "Tick every published route you drive." }), routeCount]),
       routeChoices,
       field("Other routes — one per line (optional)", manualRoutes),
+      sharedRouteHint,
       el("p", { class: "hint", text: "You can select several checkboxes, enter several routes manually, or use both." })
     ]),
     el("p", { class: "privacy-hint" }, ["See how we use and protect your information in our ", el("a", { href: "../privacy/", text: "Privacy Notice" }), "."]),
@@ -338,7 +393,8 @@ function renderRegistration(user, existing) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const selectedRoutes = [...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
-    const typedRoutes = [...new Map(manualRoutes.value.split(/[\n,;]+/).map((route) => route.trim().replace(/\s+/g, " ")).filter(Boolean).map((route) => [route.toLowerCase(), route])).values()].slice(0, 12);
+    const typedRoutes = splitRouteNames(manualRoutes.value);
+    const resolvedRoutes = resolveSharedRoutes(catalog, type.value, selectedRoutes, typedRoutes);
     if (!form.reportValidity() || (!selectedRoutes.length && !typedRoutes.length)) {
       message.textContent = !selectedRoutes.length && !typedRoutes.length
         ? "Select at least one route or enter a route manually."
@@ -352,7 +408,7 @@ function renderRegistration(user, existing) {
     const row = {
       user_id: user.id, full_name: fullName.value.trim(), phone: phone.value.trim(), transport_type: type.value,
       vehicle_description: vehicle.value.trim(),
-      plate: plate.value.trim().toUpperCase(), route_ids: [...selectedRoutes, ...typedRoutes.map((route) => manualRouteId(type.value, route))],
+      plate: plate.value.trim().toUpperCase(), route_ids: resolvedRoutes.ids,
       status: "pending", rejection_message: null, reviewed_at: null, reviewed_by: null
     };
     const { error } = await db.from("driver_profiles").upsert(row);
@@ -424,9 +480,8 @@ function renderApproved(user, profile) {
     const existingManual = (profile.route_ids || []).filter((id) => id.startsWith("manual:")).map(manualRouteName);
     const manual = el("textarea", { rows: "4", maxlength: "900", placeholder: "One route per line", "aria-label": "Other routes" });
     manual.value = existingManual.join("\n");
-    const options = catalog.places
-      .flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name })))
-      .filter((route) => route.transport_type === profile.transport_type);
+    const sharedRouteHint = el("p", { class: "route-existing-hint", hidden: true, role: "status" });
+    const options = routesForType(catalog, profile.transport_type);
     for (const route of options) {
       choices.append(el("label", { class: "route-checkbox" }, [
         el("input", { type: "checkbox", value: route.id, checked: selectedOfficial.has(route.id) }),
@@ -434,6 +489,19 @@ function renderApproved(user, profile) {
       ]));
     }
     if (!options.length) choices.append(el("p", { class: "hint", text: "No published routes are available yet. Add route names below." }));
+    function linkExistingTypedRoutes() {
+      const resolved = resolveSharedRoutes(catalog, profile.transport_type, [], splitRouteNames(manual.value));
+      for (const route of resolved.matched) {
+        const checkbox = [...choices.querySelectorAll('input[type="checkbox"]')].find((input) => input.value === route.id);
+        if (checkbox) checkbox.checked = true;
+      }
+      sharedRouteHint.hidden = !resolved.matched.length;
+      sharedRouteHint.textContent = resolved.matched.length
+        ? `${resolved.matched.map((route) => `“${route.name}”`).join(", ")} already ${resolved.matched.length === 1 ? "exists" : "exist"}. The existing shared route will be used.`
+        : "";
+    }
+    manual.addEventListener("input", linkExistingTypedRoutes);
+    linkExistingTypedRoutes();
     const message = el("p", { class: "form-error", hidden: true });
     const save = el("button", { type: "submit", class: "find compact", text: "Save routes" });
     const form = el("form", { class: "stack" }, [
@@ -441,6 +509,7 @@ function renderApproved(user, profile) {
       el("p", { class: "hint", text: "Select, remove or add every route you currently operate." }),
       choices,
       el("label", { class: "field-label" }, [el("span", { text: "Other routes — one per line" }), manual]),
+      sharedRouteHint,
       message,
       el("div", { class: "location-actions" }, [
         save,
@@ -450,8 +519,8 @@ function renderApproved(user, profile) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const official = [...choices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
-      const typed = [...new Map(manual.value.split(/[\n,;]+/).map((item) => item.trim().replace(/\s+/g, " ")).filter(Boolean).map((item) => [item.toLowerCase(), item])).values()].slice(0, 12);
-      const routeIds = [...official, ...typed.map((item) => manualRouteId(profile.transport_type, item))];
+      const typed = splitRouteNames(manual.value);
+      const routeIds = resolveSharedRoutes(catalog, profile.transport_type, official, typed).ids;
       if (!routeIds.length) {
         message.textContent = "Select a route or enter at least one route name.";
         message.hidden = false;

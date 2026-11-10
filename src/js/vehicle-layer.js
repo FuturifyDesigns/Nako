@@ -18,7 +18,7 @@ function loadImage(map, url) {
   return map.loadImage(url).then((result) => result?.data || result);
 }
 
-function toFeatureCollection(vehicles, selected) {
+function toFeatureCollection(vehicles, selected, highlightedRoute) {
   return {
     type: "FeatureCollection",
     features: (vehicles || []).map((vehicle) => {
@@ -29,7 +29,8 @@ function toFeatureCollection(vehicles, selected) {
         properties: {
           id: vehicle.id,
           icon: iconId(type),
-          selected: vehicle.id === selected ? 1 : 0
+          selected: vehicle.id === selected ? 1 : 0,
+          routeMatch: highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute) ? 1 : 0
         },
         geometry: {
           type: "Point",
@@ -43,6 +44,7 @@ function toFeatureCollection(vehicles, selected) {
 export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
   let vehicles = [];
   let selected = null;
+  let highlightedRoute = "all";
   let clickBound = false;
   let animationFrame = 0;
   let targetVehicles = [];
@@ -72,7 +74,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
         type: "geojson",
-        data: toFeatureCollection(vehicles, selected)
+        data: toFeatureCollection(vehicles, selected, highlightedRoute)
       });
     }
 
@@ -111,6 +113,9 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
           "icon-ignore-placement": true,
           "icon-pitch-alignment": "viewport",
           "icon-rotation-alignment": "viewport"
+        },
+        paint: {
+          "icon-opacity": ["case", ["any", ["==", ["get", "selected"], 1], ["==", ["get", "routeMatch"], 1]], 1, 0.34]
         }
       });
     }
@@ -133,7 +138,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
 
   function sync() {
     const source = map.getSource(SOURCE_ID);
-    if (source) source.setData(toFeatureCollection(vehicles, selected));
+    if (source) source.setData(toFeatureCollection(vehicles, selected, highlightedRoute));
   }
 
   return {
@@ -169,6 +174,11 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
     },
     async setSelected(id) {
       selected = id;
+      await ready;
+      sync();
+    },
+    async setHighlightedRoute(id) {
+      highlightedRoute = id || "all";
       await ready;
       sync();
     },

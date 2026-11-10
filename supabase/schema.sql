@@ -400,6 +400,52 @@ drop trigger if exists driver_profiles_touch on public.driver_profiles;
 create trigger driver_profiles_touch before update on public.driver_profiles
 for each row execute function public.touch_updated_at();
 
+create or replace function public.canonicalize_driver_routes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  route_id text;
+  route_name text;
+  canonical_id text;
+  clean_routes text[] := '{}';
+begin
+  foreach route_id in array coalesce(new.route_ids, '{}') loop
+    canonical_id := route_id;
+    if route_id like 'manual:%' then
+      if route_id ~* '^manual:(taxi|kombi|bus):' then
+        route_name := regexp_replace(route_id, '^manual:(taxi|kombi|bus):', '', 'i');
+      else
+        route_name := substring(route_id from 8);
+      end if;
+
+      select r.id into canonical_id
+      from public.routes r
+      where r.active
+        and r.transport_type = new.transport_type
+        and regexp_replace(lower(r.name), '[^a-z0-9]+', '', 'g') =
+            regexp_replace(lower(trim(route_name)), '[^a-z0-9]+', '', 'g')
+      order by (r.id like 'manual:%'), r.id
+      limit 1;
+      canonical_id := coalesce(canonical_id, route_id);
+    end if;
+
+    if not canonical_id = any(clean_routes) then
+      clean_routes := array_append(clean_routes, canonical_id);
+    end if;
+  end loop;
+  new.route_ids := clean_routes;
+  return new;
+end;
+$$;
+
+drop trigger if exists driver_routes_canonicalize on public.driver_profiles;
+create trigger driver_routes_canonicalize
+before insert or update of route_ids, transport_type on public.driver_profiles
+for each row execute function public.canonicalize_driver_routes();
+
 create or replace function public.sync_driver_routes_to_catalog()
 returns trigger
 language plpgsql

@@ -426,7 +426,7 @@ begin
   if p.user_id is null or p.status <> 'approved' then raise exception 'driver not approved'; end if;
   if p_accuracy is not null and p_accuracy > 120 then return jsonb_build_object('ok', false, 'reason', 'accuracy'); end if;
   select updated_at, lat, lng, accuracy into last_update, last_lat, last_lng, last_accuracy from public.driver_locations where driver_id = auth.uid();
-  if last_update is not null and last_update > now() - interval '8 seconds' then
+  if last_update is not null and last_update > now() - interval '2 seconds' then
     return jsonb_build_object('ok', false, 'reason', 'rate');
   end if;
   state := case

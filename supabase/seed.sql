@@ -164,3 +164,6 @@ insert into public.routes (
 ('kang-taxi-rank', 'kang', null, 'Kang taxi rank', 'taxi', 'Kang taxi rank', 'Local trips', 'Local taxis around the Kang rank.', '[{"lat":-23.68,"lng":22.7875},{"lat":-23.674,"lng":22.791500000000003},{"lat":-23.678,"lng":22.797500000000003},{"lat":-23.685,"lng":22.7935}]'::jsonb, true, true),
 ('kazungula-taxi-rank', 'kazungula', null, 'Kazungula taxi rank', 'taxi', 'Kazungula taxi rank', 'Local trips', 'Local taxis around the Kazungula rank.', '[{"lat":-17.7928,"lng":25.2678},{"lat":-17.7868,"lng":25.271800000000002},{"lat":-17.7908,"lng":25.277800000000003},{"lat":-17.7978,"lng":25.2738}]'::jsonb, true, true)
 on conflict (id) do nothing;
+
+-- Taxi ranks will be added manually after they have been verified.
+delete from public.routes where transport_type = 'taxi';

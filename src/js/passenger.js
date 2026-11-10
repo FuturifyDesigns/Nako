@@ -53,7 +53,7 @@ export async function mountPassenger(root) {
   root.append(shell);
 
   const langBtn = el("button", { type: "button", class: "lang-toggle", onclick: () => { toggleLang(); rebuildForm(); } });
-  const driverAccess = el("a", { class: "driver-access", href: "../driver/?mode=register" });
+  const driverAccess = el("a", { class: "driver-access", href: "../driver/?mode=login" });
   driverAccess.addEventListener("click", () => localStorage.setItem("nakolive-role-choice-v1", "driver"));
   const suggestionBox = el("div", { class: "suggestions", hidden: true });
   const zoneBlock = el("div", { class: "zone-block" });

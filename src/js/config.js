@@ -4,6 +4,6 @@ export const config = {
   // Use a browser-restricted key. Never put a service-account key here.
   googleMapsApiKey: "AIzaSyAuTqMpcnidiwzDVXJRlAUiwkBtNfgixyw",
   googleMapsMapId: "c7548ac2859c30ecafa5d527",
-  driverLocationIntervalMs: 20000,
-  passengerRefreshIntervalMs: 30000
+  driverLocationIntervalMs: 3000,
+  passengerRefreshIntervalMs: 10000
 };

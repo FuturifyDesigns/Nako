@@ -95,6 +95,27 @@ const ICONS = {
 export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   const markers = new Map();
   let selected = null;
+  function moveMarker(marker, vehicle) {
+    const target = { lat: Number(vehicle.lat), lng: Number(vehicle.lng) };
+    const current = marker.getPosition();
+    if (!current) { marker.setPosition(target); return; }
+    if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
+    const from = { lat: current.lat(), lng: current.lng() };
+    const jump = Math.abs(target.lat - from.lat) + Math.abs(target.lng - from.lng) > 0.08;
+    if (jump) { marker.setPosition(target); return; }
+    const started = performance.now();
+    const duration = 2600;
+    const frame = (time) => {
+      const progress = Math.min(1, (time - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      marker.setPosition({
+        lat: from.lat + (target.lat - from.lat) * eased,
+        lng: from.lng + (target.lng - from.lng) * eased
+      });
+      marker.nakoAnimation = progress < 1 ? requestAnimationFrame(frame) : null;
+    };
+    marker.nakoAnimation = requestAnimationFrame(frame);
+  }
   function sync(vehicles = []) {
     const ids = new Set(vehicles.map((vehicle) => vehicle.id));
     for (const [id, marker] of markers) {
@@ -113,7 +134,7 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
         markers.set(vehicle.id, marker);
       }
       marker.nakoVehicle = vehicle;
-      marker.setPosition({ lat: vehicle.lat, lng: vehicle.lng });
+      moveMarker(marker, vehicle);
       marker.setZIndex(vehicle.id === selected ? 100 : 10);
       marker.setOpacity(vehicle.id === selected ? 1 : 0.9);
     }
@@ -122,6 +143,12 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   return {
     setVehicles(vehicles) { latest = vehicles || []; sync(latest); },
     setSelected(id) { selected = id; sync(latest); },
-    clear() { for (const marker of markers.values()) marker.setMap(null); markers.clear(); }
+    clear() {
+      for (const marker of markers.values()) {
+        if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
+        marker.setMap(null);
+      }
+      markers.clear();
+    }
   };
 }

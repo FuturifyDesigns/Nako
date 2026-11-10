@@ -13,9 +13,29 @@ let lastMotionState = "idle";
 let positionHistory = [];
 let movingEvidence = 0;
 let idleEvidence = 0;
+let detectedMotionState = "idle";
+let lastStrongMovementAt = 0;
 let profileChannel = null;
 const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
+const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
+
+function normalizePhone(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("267") && digits.length === 11) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 9) digits = digits.slice(1);
+  if (digits.length === 8) return `+267${digits}`;
+  if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+  return null;
+}
+
+function accountEmail(value) {
+  const clean = String(value || "").trim().toLowerCase();
+  if (clean.includes("@")) return clean;
+  const phone = normalizePhone(clean);
+  return phone ? `${phone.slice(1)}@phone.nakolive.co.bw` : null;
+}
 
 function brand() {
   return el("a", { class: "brand", href: "../" }, [
@@ -69,7 +89,8 @@ function renderAuth() {
     el("option", { value: "register", text: "Create driver account" })
   ]);
   mode.value = new URLSearchParams(location.search).get("mode") === "register" ? "register" : "login";
-  const email = el("input", { type: "email", required: "true", autocomplete: "email", placeholder: "driver@example.com", maxlength: "160" });
+  const identifier = el("input", { type: "text", required: "true", autocomplete: "tel", inputmode: "tel", placeholder: "+267 71 234 567", maxlength: "160" });
+  const identifierLabel = el("span", { text: "Phone number" });
   const password = el("input", { type: "password", required: "true", minlength: "8", autocomplete: "current-password", placeholder: "Enter your password" });
   const passwordToggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
   const passwordInput = el("div", { class: "password-input-wrap" }, [password, passwordToggle]);
@@ -94,7 +115,8 @@ function renderAuth() {
     el("a", { href: "../privacy/", text: "Privacy & data protection notice" }),
     "."
   ]);
-  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), field("Email address", email), field("Password", passwordInput), strength, privacyNote, message, button]);
+  const identifierField = el("label", { class: "field-label auth-field" }, [identifierLabel, identifier]);
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), identifierField, field("Password", passwordInput), strength, privacyNote, message, button]);
 
   function passwordScore(value) {
     if (!value) return 0;
@@ -114,6 +136,10 @@ function renderAuth() {
   function updateMode() {
     const registering = mode.value === "register";
     button.textContent = registering ? "Create driver account" : "Sign in securely";
+    identifierLabel.textContent = registering ? "Phone number" : "Phone number or existing email";
+    identifier.placeholder = registering ? "+267 71 234 567" : "+267 71 234 567 or driver@example.com";
+    identifier.inputMode = registering ? "tel" : "text";
+    identifier.autocomplete = registering ? "tel" : "username";
     password.autocomplete = registering ? "new-password" : "current-password";
     password.minLength = registering ? 10 : 8;
     password.placeholder = registering ? "Create a strong password" : "Enter your password";
@@ -122,7 +148,7 @@ function renderAuth() {
 
   mode.addEventListener("change", updateMode);
   password.addEventListener("input", updateStrength);
-  for (const input of [email, password]) {
+  for (const input of [identifier, password]) {
     input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
     input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
   }
@@ -130,6 +156,10 @@ function renderAuth() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     updateStrength();
+    const registering = mode.value === "register";
+    const phone = normalizePhone(identifier.value);
+    const loginEmail = accountEmail(identifier.value);
+    identifier.setCustomValidity(!loginEmail || (registering && !phone) ? "Enter a valid phone number." : "");
     if (!form.reportValidity()) {
       message.textContent = "Please correct the highlighted fields before continuing.";
       message.hidden = false;
@@ -138,14 +168,14 @@ function renderAuth() {
     button.disabled = true;
     button.textContent = mode.value === "register" ? "Creating account…" : "Signing in…";
     message.hidden = true;
-    const credentials = mode.value === "register"
+    const credentials = registering
       ? {
-          email: email.value.trim(),
+          email: loginEmail,
           password: password.value,
-          options: { emailRedirectTo: new URL("../auth/verified/", location.href).href }
+          options: { data: { phone } }
         }
-      : { email: email.value.trim(), password: password.value };
-    const result = mode.value === "register" ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
+      : { email: loginEmail, password: password.value };
+    const result = registering ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
     button.disabled = false;
     updateMode();
     if (result.error) {
@@ -154,9 +184,10 @@ function renderAuth() {
       return;
     }
     if (!result.data.session) {
-      notify("Check your email and open the NakoLive verification link. You will then be returned to a page where you can continue to login.");
+      message.textContent = "The account was created, but instant sign-in is not enabled yet. Please contact the administrator.";
+      message.hidden = false;
       mode.value = "login";
-      button.textContent = "Sign in";
+      updateMode();
       return;
     }
     localStorage.setItem(ROLE_CHOICE_KEY, "driver");
@@ -234,7 +265,7 @@ function renderRegistration(user, existing) {
   const catalog = currentCatalog();
   const field = (label, input) => el("label", { class: "field-label" }, [el("span", { text: label }), input]);
   const fullName = el("input", { required: "true", minlength: "2", maxlength: "100", value: existing?.full_name || "", autocomplete: "name", placeholder: "Your full name" });
-  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || "", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
+  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || user.user_metadata?.phone || "", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
   const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: `${value[0].toUpperCase() + value.slice(1)} driver`, selected: existing?.transport_type === value ? "selected" : null })));
   const vehicle = el("input", { required: "true", minlength: "2", maxlength: "120", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
   const plate = el("input", { required: "true", minlength: "2", maxlength: "30", pattern: "[A-Za-z0-9 -]{2,30}", value: existing?.plate || "", autocapitalize: "characters", placeholder: "B 123 ABC" });
@@ -416,12 +447,11 @@ function startSharing(status, detail, button) {
     const now = Date.now();
     if (position.coords.accuracy > 120) { detail.textContent = `Waiting for better accuracy (${Math.round(position.coords.accuracy)} m)…`; return; }
     lastPosition = position;
-    const meters = lastSentPosition ? distanceMeters(lastSentPosition.coords, position.coords) : Infinity;
     const motion = classifyMotion(position);
     const elapsed = now - lastSentAt;
     if (lastSentPosition && motion === lastMotionState) {
-      if (motion === "moving" && elapsed < (config.driverLocationIntervalMs || 20000) && meters < 30) return;
-      if (motion === "idle" && elapsed < 90000) return;
+      if (motion === "moving" && elapsed < (config.driverLocationIntervalMs || 3000)) return;
+      if (motion === "idle" && elapsed < 10000) return;
     }
     lastSentAt = now;
     const locationPayload = {
@@ -429,6 +459,16 @@ function startSharing(status, detail, button) {
       p_speed: position.coords.speed, p_heading: position.coords.heading, p_sampled_at: new Date(position.timestamp).toISOString(),
       p_motion_state: motion
     };
+    localStorage.setItem(QUEUED_LOCATION_KEY, JSON.stringify(locationPayload));
+    if (!navigator.onLine) {
+      button.disabled = false;
+      lastSentPosition = position;
+      lastMotionState = motion;
+      status.textContent = motion === "moving" ? "On the move" : "Idle";
+      detail.textContent = "Offline · latest position saved and will sync when the connection returns.";
+      button.textContent = "Turn location off";
+      return;
+    }
     let response = await db.rpc("publish_driver_location", locationPayload);
     // Keep location sharing operational during a staged deployment where the
     // database has not yet received the optional motion-state parameter.
@@ -439,9 +479,11 @@ function startSharing(status, detail, button) {
     const { data, error } = response;
     button.disabled = false;
     if (error) { detail.textContent = navigator.onLine ? "The location update failed. We will retry." : "Offline. The latest point will send when the connection returns."; return; }
+    localStorage.removeItem(QUEUED_LOCATION_KEY);
     lastSentPosition = position;
-    lastMotionState = data?.motion_state || motion;
-    status.textContent = data?.motion_state === "moving" ? "On the move" : "Idle";
+    const publishedState = data?.motion_state || motion;
+    lastMotionState = publishedState;
+    status.textContent = publishedState === "moving" ? "On the move" : "Idle";
     detail.textContent = `Location on · accuracy about ${Math.round(position.coords.accuracy)} m · updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     button.textContent = "Turn location off";
   }, (error) => {
@@ -450,12 +492,24 @@ function startSharing(status, detail, button) {
     detail.textContent = error.code === 1 ? "Allow precise location in your browser settings." : "Could not get a GPS position. Try again outdoors.";
     notify(detail.textContent, "error");
   }, { enableHighAccuracy: true, maximumAge: 8000, timeout: 20000 });
-  window.addEventListener("online", retryLatest, { once: true });
 }
 
 async function retryLatest() {
-  if (!lastPosition || watchId == null) return;
+  if (watchId == null || localStorage.getItem(SHARING_KEY) !== "true") return;
   lastSentAt = 0;
+  const raw = localStorage.getItem(QUEUED_LOCATION_KEY);
+  if (!raw || !db) return;
+  try {
+    const payload = JSON.parse(raw);
+    let response = await db.rpc("publish_driver_location", payload);
+    if (response.error?.code === "PGRST202") {
+      const { p_motion_state, ...legacyPayload } = payload;
+      response = await db.rpc("publish_driver_location", legacyPayload);
+    }
+    if (!response.error) localStorage.removeItem(QUEUED_LOCATION_KEY);
+  } catch {
+    localStorage.removeItem(QUEUED_LOCATION_KEY);
+  }
 }
 
 async function stopSharing(remote = true, status, detail, button) {
@@ -467,7 +521,10 @@ async function stopSharing(remote = true, status, detail, button) {
   positionHistory = [];
   movingEvidence = 0;
   idleEvidence = 0;
+  detectedMotionState = "idle";
+  lastStrongMovementAt = 0;
   if (remote) localStorage.setItem(SHARING_KEY, "false");
+  if (remote) localStorage.removeItem(QUEUED_LOCATION_KEY);
   if (remote && db) await db.rpc("stop_driver_location");
   if (status) status.textContent = "Location is off";
   if (detail) detail.textContent = "Passengers cannot see this vehicle until you turn location on.";
@@ -477,36 +534,37 @@ async function stopSharing(remote = true, status, detail, button) {
 function classifyMotion(position) {
   const now = position.timestamp || Date.now();
   positionHistory.push(position);
-  positionHistory = positionHistory.filter((item) => now - (item.timestamp || now) <= 60000).slice(-6);
-  const reference = positionHistory.find((item) => now - (item.timestamp || now) >= 10000) || positionHistory[0];
+  positionHistory = positionHistory.filter((item) => now - (item.timestamp || now) <= 12000).slice(-12);
+  const reference = positionHistory.find((item) => now - (item.timestamp || now) >= 5000) || positionHistory[0];
   const seconds = Math.max(1, (now - (reference.timestamp || now)) / 1000);
   const traveled = reference === position ? 0 : distanceMeters(reference.coords, position.coords);
-  const uncertainty = Math.max(35, Math.min(120, Number(reference.coords.accuracy || 40) + Number(position.coords.accuracy || 40)));
-  const reportedSpeed = Number.isFinite(position.coords.speed) ? position.coords.speed : 0;
+  const uncertainty = Math.max(18, Math.min(100, (Number(reference.coords.accuracy || 35) + Number(position.coords.accuracy || 35)) * 0.55));
+  const reportedSpeed = Number.isFinite(position.coords.speed) && position.coords.speed >= 0 ? position.coords.speed : 0;
   const currentAccuracy = Number(position.coords.accuracy || 999);
-  // A reliable driving-speed reading counts immediately as evidence. With a
-  // weaker signal, require matching displacement so ordinary GPS drift cannot
-  // make a parked driver alternate between Idle and On the move.
-  const reliableDrivingSpeed = reportedSpeed >= 2 && currentAccuracy <= 65;
-  const speedHasTravel = reportedSpeed >= 2 && seconds >= 10 && traveled >= Math.max(12, uncertainty * 0.25);
-  const distanceHasTravel = seconds >= 10 && traveled >= uncertainty && traveled / seconds >= 1.2;
-  const movingSignal = reliableDrivingSpeed || speedHasTravel || distanceHasTravel;
+  const calculatedSpeed = traveled / seconds;
+  // Car movement is identified from driving-speed GPS readings or sustained
+  // displacement. Ordinary hand movement and walking remain below this band.
+  const reliableDrivingSpeed = reportedSpeed >= 2.4 && currentAccuracy <= 80;
+  const distanceHasTravel = seconds >= 5 && traveled >= uncertainty && calculatedSpeed >= 2.1;
+  const movingSignal = reliableDrivingSpeed || distanceHasTravel;
 
   if (movingSignal) {
+    lastStrongMovementAt = now;
     movingEvidence += 1;
     idleEvidence = 0;
   } else {
     idleEvidence += 1;
     movingEvidence = 0;
   }
-  if (lastMotionState === "idle" && movingEvidence >= 2) return "moving";
-  if (lastMotionState === "moving" && idleEvidence < 3) return "moving";
-  return "idle";
+  if (detectedMotionState === "idle" && (reportedSpeed >= 4 || movingEvidence >= 2)) detectedMotionState = "moving";
+  if (detectedMotionState === "moving" && now - lastStrongMovementAt >= 10000 && idleEvidence >= 4) detectedMotionState = "idle";
+  return detectedMotionState;
 }
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && watchId != null) lastSentAt = 0;
 });
+window.addEventListener("online", retryLatest);
 
 function distanceMeters(a, b) {
   const lat = ((a.latitude + b.latitude) / 2) * Math.PI / 180;

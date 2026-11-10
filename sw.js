@@ -1,4 +1,4 @@
-const CACHE = "nakolive-shell-2026-11-08-37";
+const CACHE = "nakolive-shell-2026-11-10-38";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -9,8 +9,6 @@ const PRECACHE = [
   "./admin/index.html",
   "./driver/",
   "./driver/index.html",
-  "./auth/verified/",
-  "./auth/verified/index.html",
   "./privacy/",
   "./privacy/index.html",
   "./manifest.webmanifest",

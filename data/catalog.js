@@ -642,5 +642,9 @@ function placeHub(id, name, kind, lat, lng, popular, extraRoutes) {
 }
 
 export function localCatalog() {
-  return structuredClone(catalog);
+  const local = structuredClone(catalog);
+  for (const place of local.places) {
+    place.routes = (place.routes || []).filter((route) => route.transport_type !== "taxi");
+  }
+  return local;
 }

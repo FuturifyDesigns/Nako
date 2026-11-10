@@ -44,6 +44,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
   let vehicles = [];
   let selected = null;
   let clickBound = false;
+  let animationFrame = 0;
 
   const ready = (async () => {
     for (const [type, url] of Object.entries(ASSETS)) {
@@ -126,9 +127,28 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
 
   return {
     async setVehicles(next) {
-      vehicles = next || [];
+      const target = next || [];
       await ready;
-      sync();
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+      const previous = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
+      const started = performance.now();
+      const duration = 2600;
+      const animate = (time) => {
+        const progress = Math.min(1, (time - started) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        vehicles = target.map((vehicle) => {
+          const from = previous.get(vehicle.id);
+          if (!from) return vehicle;
+          return {
+            ...vehicle,
+            lat: Number(from.lat) + (Number(vehicle.lat) - Number(from.lat)) * eased,
+            lng: Number(from.lng) + (Number(vehicle.lng) - Number(from.lng)) * eased
+          };
+        });
+        sync();
+        animationFrame = progress < 1 ? requestAnimationFrame(animate) : 0;
+      };
+      animationFrame = requestAnimationFrame(animate);
     },
     async setSelected(id) {
       selected = id;
@@ -136,6 +156,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
       sync();
     },
     clear() {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
       vehicles = [];
       selected = null;
       if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);

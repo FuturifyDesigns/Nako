@@ -5,6 +5,7 @@ import { supabaseClient } from "./sync.js";
 
 const CACHE_KEY = "live-vehicles";
 const FRESH_MS = 5 * 60 * 1000;
+const MOTION_FRESH_MS = 15000;
 
 function normalize(row, point) {
   const sampled = new Date(row.sampled_at || row.updated_at || 0).getTime();
@@ -20,7 +21,7 @@ function normalize(row, point) {
     accuracy: Number(row.accuracy || 0),
     bearing: Number(row.heading || 0),
     sampledAt: row.sampled_at,
-    state: row.motion_state === "moving" && Date.now() - sampled < FRESH_MS ? "moving" : "idle"
+    state: row.motion_state === "moving" && Date.now() - sampled < MOTION_FRESH_MS ? "moving" : "idle"
   };
   vehicle.distance = point ? haversine(point, vehicle) : null;
   return vehicle;
@@ -63,7 +64,7 @@ export function watchLiveVehicles(options, onChange) {
   };
   const scheduleRefresh = () => {
     window.clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(refresh, 1800);
+    debounceTimer = window.setTimeout(refresh, 100);
   };
   refresh();
   const timer = window.setInterval(refresh, config.passengerRefreshIntervalMs || 20000);

@@ -51,6 +51,7 @@ export async function mountPassenger(root) {
   let recommendationVersion = 0;
   let updateOpenPassengerPoint = null;
   let routeSignature = catalogRouteSignature(state.catalog);
+  let gpsPlaceApplied = false;
 
   const shell = el("div", { class: "finder" });
   const form = el("section", { class: "card finder-card" });
@@ -88,9 +89,7 @@ export async function mountPassenger(root) {
     oninput: (event) => onQuery(event.target.value),
     onfocus: () => showSuggestions(true)
   });
-  const findBtn = el("button", { type: "button", class: "find", onclick: () => openResults({ pinFirst: false }) });
-  const useLocBtn = el("button", { type: "button", class: "ghost", onclick: toggleGps });
-  const pinBtn = el("button", { type: "button", class: "ghost", onclick: () => openResults({ pinFirst: true }) });
+  const findBtn = el("button", { type: "button", class: "find", onclick: openResults });
 
   form.append(
     el("div", { class: "finder-top" }, [driverAccess, langBtn]),
@@ -108,7 +107,6 @@ export async function mountPassenger(root) {
     chips,
     zoneBlock,
     stepLocation,
-    el("div", { class: "location-actions" }, [useLocBtn, pinBtn]),
     locationLabel,
     locationPrivacy,
     el("div", { class: "step-row" }, [stepRoute, routeKind]),
@@ -128,8 +126,6 @@ export async function mountPassenger(root) {
     stepLocation.textContent = t("stepLocation");
     stepRoute.textContent = t("stepRoute");
     placeInput.placeholder = t("placePlaceholder");
-    useLocBtn.replaceChildren(icon("locate"), document.createTextNode(t("useLocation")));
-    pinBtn.replaceChildren(icon("pin"), document.createTextNode(t("pinMap")));
     findBtn.replaceChildren(document.createTextNode(t("findTransport")), icon("arrow"));
     clear(typeGrid);
     const art = {
@@ -151,7 +147,6 @@ export async function mountPassenger(root) {
       button.dataset.type = type.id;
       typeGrid.append(button);
     }
-    syncLocationButton();
     routeKind.textContent = state.transport === "taxi" ? t("taxiRanks") : state.transport === "bus" ? t("busCorridors") : t("kombiCorridors");
     updateZones();
     updateRoutes();
@@ -222,10 +217,11 @@ export async function mountPassenger(root) {
   function applySuggestion(item) {
     if (item.type === "alias") {
       choosePlace(item.place, item.label, item.alias.zoneId || "all");
-      state.point = { lat: item.alias.lat, lng: item.alias.lng };
-      state.pointSource = "typed";
-      stopGps();
-      noteLocationChange(state.point, "typed");
+      if (state.pointSource !== "gps") {
+        state.point = { lat: item.alias.lat, lng: item.alias.lng };
+        state.pointSource = "typed";
+        noteLocationChange(state.point, "typed");
+      }
     } else {
       choosePlace(item.place, item.place.name);
     }
@@ -388,28 +384,25 @@ export async function mountPassenger(root) {
     }
   }
 
-  function syncLocationButton() {
-    const on = state.pointSource === "gps" && !!state.point;
-    useLocBtn.classList.toggle("is-on", on);
-    useLocBtn.replaceChildren(
-      icon("locate"),
-      document.createTextNode(on ? t("locationCurrent") : t("useLocation"))
-    );
-  }
-
   function applyGpsFix(position, trackEvent = true) {
+    const firstFix = state.pointSource !== "gps" || !state.point;
     state.point = { lat: position.coords.latitude, lng: position.coords.longitude };
     state.pointSource = "gps";
+    if (!gpsPlaceApplied && state.catalog.places.length) {
+      const nearest = state.catalog.places
+        .map((place) => ({ place, distance: haversine(state.point, place) }))
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (nearest?.place) choosePlace(nearest.place, nearest.place.name, "all", true);
+      gpsPlaceApplied = true;
+    }
     noteLocationChange(state.point, "gps");
     updateLocation();
-    updateOpenPassengerPoint?.();
-    syncLocationButton();
+    updateOpenPassengerPoint?.(firstFix);
     if (trackEvent) track("location_set", { city: state.place?.name, transport: state.transport });
   }
 
   function updateLocation() {
     const point = state.point;
-    syncLocationButton();
     if (!point) {
       locationLabel.textContent = state.place
         ? t("locationOffPlace", { place: state.place.name })
@@ -430,15 +423,8 @@ export async function mountPassenger(root) {
     state.watchStop = null;
   }
 
-  function toggleGps() {
-    if (state.pointSource === "gps" && state.point) {
-      stopGps();
-      state.point = null;
-      state.pointSource = "";
-      noteLocationChange(null, "");
-      updateLocation();
-      return;
-    }
+  function startGps() {
+    if (state.watchStop) return;
     if (!navigator.geolocation) {
       locationLabel.textContent = t("locationDenied");
       return;
@@ -461,7 +447,6 @@ export async function mountPassenger(root) {
           if (!state.point) {
             state.pointSource = "";
             locationLabel.textContent = t("locationDenied");
-            syncLocationButton();
           }
         },
         options
@@ -469,7 +454,7 @@ export async function mountPassenger(root) {
     }, options);
   }
 
-  function openResults({ pinFirst }) {
+  function openResults() {
     if (!state.place) {
       routeHint.textContent = t("routeHintNeedTown");
       placeInput.focus();
@@ -488,7 +473,7 @@ export async function mountPassenger(root) {
     form.hidden = true;
     results.hidden = false;
     history.pushState({ nako: "results" }, "");
-    renderResults({ ranked, chosen, pinFirst, point });
+    renderResults({ ranked, chosen, point });
   }
 
   let map;
@@ -507,7 +492,7 @@ export async function mountPassenger(root) {
     updateOpenPassengerPoint = null;
   }
 
-  function renderResults({ ranked, chosen, pinFirst, point }) {
+  function renderResults({ ranked, chosen, point }) {
     destroyMap();
     clear(results);
     state.searching = true;
@@ -525,15 +510,7 @@ export async function mountPassenger(root) {
       el("div", { class: "radar" }),
       el("p", { text: t("checkingRank") })
     ]);
-    const pickupLabel = el("div", { class: "pickup-label", hidden: true }, [
-      el("span", { class: "pickup-kicker", text: t("pickup") }),
-      el("strong", { class: "pickup-name", text: state.place.name })
-    ]);
     const mapRouteTitle = el("strong", { text: active ? active.name : t("noRoute") });
-    const mapTools = el("div", { class: "map-tools" }, [
-      el("button", { type: "button", class: "tool", "aria-label": t("location"), onclick: toggleGpsFromMap }, [icon("locate")]),
-      el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
-    ]);
 
     function setSheetHidden(hidden) {
       sheet.classList.toggle("is-hidden", hidden);
@@ -575,14 +552,9 @@ export async function mountPassenger(root) {
           el("span", { text: `${state.place.name} · ${labelFor(state.transport)}` })
         ])
       ]),
-      mapTools,
-      pickupLabel,
       searchVeil,
       sheet
     );
-
-    const pin = el("div", { class: "center-pin", hidden: !pinFirst });
-    results.append(pin);
 
     function fillSheet(current) {
       clear(sheetBody);
@@ -685,7 +657,6 @@ export async function mountPassenger(root) {
       state.selectedVehicle = null;
       fillSheet(route);
       focusMap(route);
-      updatePickup();
       startFleetWatch();
     }
 
@@ -723,22 +694,6 @@ export async function mountPassenger(root) {
       });
     }
 
-    function updatePickup() {
-      // Only show for an explicit pin/GPS/typed spot — not the default town centre.
-      const explicit = state.pointSource === "gps" || state.pointSource === "pin" || state.pointSource === "typed";
-      const pt = explicit ? state.point : null;
-      if (!pt) {
-        pickupLabel.hidden = true;
-        pickupLabel.classList.remove("is-visible");
-        return;
-      }
-      pickupLabel.hidden = false;
-      const name = pickupLabel.querySelector(".pickup-name");
-      const near = nearestLandmark(state.place?.landmarks, pt);
-      if (name) name.textContent = near?.landmark?.name || t("pickup");
-      requestAnimationFrame(() => pickupLabel.classList.add("is-visible"));
-    }
-
     function paintPassengerPoint() {
       const explicit = ["gps", "pin", "typed"].includes(state.pointSource) ? state.point : null;
       if (!map) return;
@@ -761,39 +716,14 @@ export async function mountPassenger(root) {
       map.addLayer({ id: `${sourceId}-halo`, type: "circle", source: sourceId, paint: { "circle-radius": 15, "circle-color": "#1657d6", "circle-opacity": 0.18 } });
       map.addLayer({ id: `${sourceId}-dot`, type: "circle", source: sourceId, paint: { "circle-radius": 7, "circle-color": "#1657d6", "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
     }
-    updateOpenPassengerPoint = paintPassengerPoint;
-
-    function setPinMode(on) {
-      pin.hidden = !on;
-      const button = results.querySelector("#pin-tool");
-      button.classList.toggle("is-on", on);
-      button.onclick = () => setPinMode(pin.hidden);
-      if (!on && map) {
-        const center = map.getCenter();
-        state.point = { lat: center.lat, lng: center.lng };
-        state.pointSource = "pin";
-        stopGps();
-        noteLocationChange(state.point, "pin");
-        track("location_set", { city: state.place.name, transport: state.transport });
-        switchRoute(currentRoute || active);
+    updateOpenPassengerPoint = (recenter = false) => {
+      paintPassengerPoint();
+      if (recenter && state.point && map) {
+        map.easeTo({ center: [state.point.lng, state.point.lat], zoom: 15.2, duration: 500 });
       }
-    }
-
-    function toggleGpsFromMap() {
-      toggleGps();
-      const wait = (tries = 0) => {
-        if (state.point && map) {
-          map.easeTo({ center: [state.point.lng, state.point.lat], zoom: 15, duration: 700 });
-          switchRoute(currentRoute || active);
-          return;
-        }
-        if (tries < 20) window.setTimeout(() => wait(tries + 1), 250);
-      };
-      wait();
-    }
+    };
 
     fillSheet(active);
-    updatePickup();
     startFleetWatch();
     refreshOpenResults = ({ ranked: nextRanked, chosen: nextChosen }) => {
       working = nextRanked || [];
@@ -841,7 +771,6 @@ export async function mountPassenger(root) {
         window.setTimeout(() => {
           state.searching = false;
           searchVeil.hidden = true;
-          if (pinFirst) setPinMode(true);
         }, delay);
       });
       map.on("error", (event) => console.warn("Fallback map tile error", event?.error || event));
@@ -860,7 +789,6 @@ export async function mountPassenger(root) {
         window.setTimeout(() => {
           state.searching = false;
           searchVeil.hidden = true;
-          if (pinFirst) setPinMode(true);
         }, delay);
       }).catch((error) => {
         console.warn(error);
@@ -910,5 +838,6 @@ export async function mountPassenger(root) {
   if (initial) choosePlace(initial, "Gaborone", "all", true);
   else updateRoutes();
   await startSync();
+  startGps();
   trackOnce("app_open", { city: state.place?.name, transport: state.transport, lang: getLang() });
 }

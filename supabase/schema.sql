@@ -400,6 +400,69 @@ drop trigger if exists driver_profiles_touch on public.driver_profiles;
 create trigger driver_profiles_touch before update on public.driver_profiles
 for each row execute function public.touch_updated_at();
 
+create or replace function public.sync_driver_routes_to_catalog()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  route_id text;
+  route_name text;
+  matched_place public.places%rowtype;
+begin
+  if new.status <> 'approved' then return new; end if;
+
+  foreach route_id in array coalesce(new.route_ids, '{}') loop
+    if route_id not like 'manual:%' then continue; end if;
+    if route_id ~* '^manual:(taxi|kombi|bus):' then
+      route_name := regexp_replace(route_id, '^manual:(taxi|kombi|bus):', '', 'i');
+    else
+      route_name := substring(route_id from 8);
+    end if;
+    route_name := trim(route_name);
+    if char_length(route_name) < 2 then continue; end if;
+
+    select p.* into matched_place
+    from public.places p
+    where p.active and lower(route_name) like '%' || lower(p.name) || '%'
+    order by char_length(p.name) desc
+    limit 1;
+
+    if matched_place.id is null then
+      select p.* into matched_place
+      from public.places p
+      where p.active
+      order by (p.name = 'Gaborone') desc, p.popular desc, p.name
+      limit 1;
+    end if;
+    if matched_place.id is null then continue; end if;
+
+    insert into public.routes (
+      id, place_id, zone_id, name, transport_type, origin_name,
+      destination_name, summary, path, guide, active
+    ) values (
+      route_id, matched_place.id, null, route_name, new.transport_type,
+      route_name, route_name, 'Route supplied by an approved driver.',
+      jsonb_build_array(
+        jsonb_build_object('lat', matched_place.lat, 'lng', matched_place.lng - 0.0002),
+        jsonb_build_object('lat', matched_place.lat, 'lng', matched_place.lng + 0.0002)
+      ),
+      false, true
+    )
+    on conflict (id) do update set
+      transport_type = excluded.transport_type,
+      active = true;
+  end loop;
+  return new;
+end;
+$$;
+
+drop trigger if exists driver_routes_catalog_sync on public.driver_profiles;
+create trigger driver_routes_catalog_sync
+after insert or update of route_ids, status, transport_type on public.driver_profiles
+for each row execute function public.sync_driver_routes_to_catalog();
+
 drop function if exists public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz);
 create or replace function public.publish_driver_location(
   p_lat double precision,

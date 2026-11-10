@@ -56,8 +56,38 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
     const timer = window.setTimeout(() => finish(() => reject(new Error("Google Maps tiles timed out"))), 7000);
   });
   let pendingCameraOffset = null;
+  let cameraMoving = false;
+  let userMarker = null;
+  maps.event.addListener(native, "zoom_changed", () => { cameraMoving = true; });
+  maps.event.addListener(native, "dragstart", () => { cameraMoving = true; });
+  maps.event.addListener(native, "idle", () => { cameraMoving = false; });
   return {
     native,
+    isCameraMoving() { return cameraMoving; },
+    setUserLocation(point) {
+      if (!point) {
+        userMarker?.setMap(null);
+        userMarker = null;
+        return;
+      }
+      if (!userMarker) {
+        userMarker = new maps.Marker({
+          map: native,
+          title: "Your location",
+          zIndex: 250,
+          icon: {
+            path: maps.SymbolPath.CIRCLE,
+            scale: 9,
+            fillColor: "#1657d6",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeOpacity: 1,
+            strokeWeight: 4
+          }
+        });
+      }
+      userMarker.setPosition({ lat: Number(point.lat), lng: Number(point.lng) });
+    },
     easeTo(options = {}) {
       if (pendingCameraOffset) {
         maps.event.removeListener(pendingCameraOffset);
@@ -81,7 +111,7 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
       const point = native.getCenter();
       return { lat: point.lat(), lng: point.lng() };
     },
-    remove() { container.replaceChildren(); },
+    remove() { userMarker?.setMap(null); userMarker = null; container.replaceChildren(); },
     resize() { globalThis.google.maps.event.trigger(native, "resize"); }
   };
 }
@@ -95,11 +125,20 @@ const ICONS = {
 export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   const markers = new Map();
   let selected = null;
+  const zoomListener = globalThis.google.maps.event.addListener(mapAdapter.native, "zoom_changed", () => {
+    for (const marker of markers.values()) {
+      if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
+      marker.nakoAnimation = null;
+      const vehicle = marker.nakoVehicle;
+      if (vehicle) marker.setPosition({ lat: Number(vehicle.lat), lng: Number(vehicle.lng) });
+    }
+  });
   function moveMarker(marker, vehicle) {
     const target = { lat: Number(vehicle.lat), lng: Number(vehicle.lng) };
     const current = marker.getPosition();
     if (!current) { marker.setPosition(target); return; }
     if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
+    if (mapAdapter.isCameraMoving?.()) { marker.setPosition(target); return; }
     const from = { lat: current.lat(), lng: current.lng() };
     const jump = Math.abs(target.lat - from.lat) + Math.abs(target.lng - from.lng) > 0.08;
     if (jump) { marker.setPosition(target); return; }
@@ -144,6 +183,7 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
     setVehicles(vehicles) { latest = vehicles || []; sync(latest); },
     setSelected(id) { selected = id; sync(latest); },
     clear() {
+      globalThis.google.maps.event.removeListener(zoomListener);
       for (const marker of markers.values()) {
         if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
         marker.setMap(null);

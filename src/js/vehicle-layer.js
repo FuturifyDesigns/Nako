@@ -45,6 +45,17 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
   let selected = null;
   let clickBound = false;
   let animationFrame = 0;
+  let targetVehicles = [];
+
+  const stopAnimationForCamera = () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+    if (targetVehicles.length) {
+      vehicles = targetVehicles;
+      sync();
+    }
+  };
+  map.on("zoomstart", stopAnimationForCamera);
 
   const ready = (async () => {
     for (const [type, url] of Object.entries(ASSETS)) {
@@ -128,8 +139,14 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
   return {
     async setVehicles(next) {
       const target = next || [];
+      targetVehicles = target;
       await ready;
       if (animationFrame) cancelAnimationFrame(animationFrame);
+      if (map.isMoving?.()) {
+        vehicles = target;
+        sync();
+        return;
+      }
       const previous = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
       const started = performance.now();
       const duration = 2600;
@@ -156,6 +173,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
       sync();
     },
     clear() {
+      map.off("zoomstart", stopAnimationForCamera);
       if (animationFrame) cancelAnimationFrame(animationFrame);
       vehicles = [];
       selected = null;

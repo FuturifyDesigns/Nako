@@ -24,6 +24,10 @@ function labelFor(type) {
   return t("kombi");
 }
 
+function catalogRouteSignature(catalog) {
+  return catalog.places.flatMap((place) => place.routes.map((route) => `${route.id}:${route.name}:${route.transport_type}`)).sort().join("|");
+}
+
 export async function mountPassenger(root) {
   const state = {
     catalog: currentCatalog(),
@@ -45,6 +49,8 @@ export async function mountPassenger(root) {
     recommendationAnchor: null
   };
   let recommendationVersion = 0;
+  let updateOpenPassengerPoint = null;
+  let routeSignature = catalogRouteSignature(state.catalog);
 
   const shell = el("div", { class: "finder" });
   const form = el("section", { class: "card finder-card" });
@@ -396,6 +402,7 @@ export async function mountPassenger(root) {
     state.pointSource = "gps";
     noteLocationChange(state.point, "gps");
     updateLocation();
+    updateOpenPassengerPoint?.();
     syncLocationButton();
     if (trackEvent) track("location_set", { city: state.place?.name, transport: state.transport });
   }
@@ -487,6 +494,7 @@ export async function mountPassenger(root) {
   let map;
   let layer;
   let stopFleetWatch;
+  let refreshOpenResults = null;
 
   function destroyMap() {
     stopFleetWatch?.();
@@ -495,6 +503,8 @@ export async function mountPassenger(root) {
     if (map) map.remove();
     map = null;
     layer = null;
+    refreshOpenResults = null;
+    updateOpenPassengerPoint = null;
   }
 
   function renderResults({ ranked, chosen, pinFirst, point }) {
@@ -502,9 +512,10 @@ export async function mountPassenger(root) {
     clear(results);
     state.searching = true;
     state.selectedVehicle = null;
-    const working = ranked.length ? ranked : [];
+    let working = ranked.length ? ranked : [];
     const active = chosen || working[0]?.route || null;
     let currentRoute = active;
+    let fleetCameraSet = false;
     state.fleet = [];
 
     const mapCanvas = el("div", { class: "map-canvas" });
@@ -518,6 +529,7 @@ export async function mountPassenger(root) {
       el("span", { class: "pickup-kicker", text: t("pickup") }),
       el("strong", { class: "pickup-name", text: state.place.name })
     ]);
+    const mapRouteTitle = el("strong", { text: active ? active.name : t("noRoute") });
     const mapTools = el("div", { class: "map-tools" }, [
       el("button", { type: "button", class: "tool", "aria-label": t("location"), onclick: toggleGpsFromMap }, [icon("locate")]),
       el("button", { type: "button", class: "tool", id: "pin-tool", "aria-label": t("movePin"), onclick: () => setPinMode(true) }, [icon("pin")])
@@ -559,7 +571,7 @@ export async function mountPassenger(root) {
       el("header", { class: "map-bar" }, [
         el("button", { type: "button", class: "back", onclick: () => history.back() }, [t("back")]),
         el("div", {}, [
-          el("strong", { text: active ? active.name : t("noRoute") }),
+          mapRouteTitle,
           el("span", { text: `${state.place.name} · ${labelFor(state.transport)}` })
         ])
       ]),
@@ -599,6 +611,7 @@ export async function mountPassenger(root) {
         banner,
         el("div", { class: "vehicle-list" }, state.fleet.map((vehicle) => {
           const selected = state.selectedVehicle === vehicle.id;
+          const lastSeen = vehicle.sampledAt ? new Date(vehicle.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now";
           return el("div", { class: `vehicle-block${selected ? " is-selected" : ""}` }, [
             el("button", {
               type: "button",
@@ -608,6 +621,12 @@ export async function mountPassenger(root) {
               el("strong", { text: `${labelFor(vehicle.type)} · ${vehicle.plate}` }),
               el("span", { text: `${vehicle.routeName} · ${statusLabel(vehicle.state)}${vehicle.distance != null ? ` · ${formatDistance(vehicle.distance)}` : ""}` })
             ]),
+            selected ? el("div", { class: "vehicle-details" }, [
+              el("span", { class: `vehicle-status${vehicle.state === "moving" ? " is-moving" : ""}`, text: statusLabel(vehicle.state) }),
+              el("div", { class: "vehicle-details-row" }, [el("span", { text: "Routes" }), el("strong", { text: (vehicle.routeNames || [vehicle.routeName]).join(", ") })]),
+              el("div", { class: "vehicle-details-row" }, [el("span", { text: "Last update" }), el("strong", { text: lastSeen })]),
+              vehicle.accuracy ? el("div", { class: "vehicle-details-row" }, [el("span", { text: "GPS accuracy" }), el("strong", { text: `About ${Math.round(vehicle.accuracy)} m` })]) : null
+            ].filter(Boolean)) : null,
             selected ? el("button", {
               type: "button",
               class: "directions-btn",
@@ -673,21 +692,26 @@ export async function mountPassenger(root) {
     function startFleetWatch() {
       stopFleetWatch?.();
       stopFleetWatch = watchLiveVehicles(
-        () => ({ transport: state.transport, routeId: currentRoute?.id || "all", point: focusPoint() }),
+        () => ({ transport: state.transport, routeId: "all", point: focusPoint() }),
         (vehicles) => {
           state.fleet = vehicles;
           if (state.selectedVehicle && !vehicles.some((vehicle) => vehicle.id === state.selectedVehicle)) state.selectedVehicle = null;
           layer?.setVehicles(vehicles);
           layer?.setSelected(state.selectedVehicle);
           fillSheet(currentRoute);
+          if (!["gps", "pin", "typed"].includes(state.pointSource) && vehicles.length && map && !fleetCameraSet) {
+            focusMap(currentRoute);
+          }
         }
       );
     }
 
     function focusMap(route) {
       if (!map) return;
-      const spot = state.fleet[0] || route?.path?.[0] || focusPoint();
+      const explicitPassengerPoint = ["gps", "pin", "typed"].includes(state.pointSource) ? state.point : null;
+      const spot = explicitPassengerPoint || state.fleet[0] || route?.path?.[0] || focusPoint();
       if (!spot) return;
+      if (!explicitPassengerPoint && state.fleet.length) fleetCameraSet = true;
       const length = route?.path?.reduce((sum, spotItem, index) => index ? sum + haversine(route.path[index - 1], spotItem) : 0, 0) || 0;
       map.easeTo({
         center: [spot.lng, spot.lat],
@@ -714,6 +738,30 @@ export async function mountPassenger(root) {
       if (name) name.textContent = near?.landmark?.name || t("pickup");
       requestAnimationFrame(() => pickupLabel.classList.add("is-visible"));
     }
+
+    function paintPassengerPoint() {
+      const explicit = ["gps", "pin", "typed"].includes(state.pointSource) ? state.point : null;
+      if (!map) return;
+      if (map.setUserLocation) {
+        map.setUserLocation(explicit);
+        return;
+      }
+      const sourceId = "nako-passenger-location";
+      const data = {
+        type: "FeatureCollection",
+        features: explicit ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [explicit.lng, explicit.lat] } }] : []
+      };
+      const source = map.getSource?.(sourceId);
+      if (source) {
+        source.setData(data);
+        return;
+      }
+      if (!explicit || !map.isStyleLoaded?.()) return;
+      map.addSource(sourceId, { type: "geojson", data });
+      map.addLayer({ id: `${sourceId}-halo`, type: "circle", source: sourceId, paint: { "circle-radius": 15, "circle-color": "#1657d6", "circle-opacity": 0.18 } });
+      map.addLayer({ id: `${sourceId}-dot`, type: "circle", source: sourceId, paint: { "circle-radius": 7, "circle-color": "#1657d6", "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
+    }
+    updateOpenPassengerPoint = paintPassengerPoint;
 
     function setPinMode(on) {
       pin.hidden = !on;
@@ -747,6 +795,14 @@ export async function mountPassenger(root) {
     fillSheet(active);
     updatePickup();
     startFleetWatch();
+    refreshOpenResults = ({ ranked: nextRanked, chosen: nextChosen }) => {
+      working = nextRanked || [];
+      const currentId = currentRoute?.id || state.routeId;
+      currentRoute = working.find((item) => item.route.id === currentId)?.route || nextChosen || working[0]?.route || null;
+      mapRouteTitle.textContent = currentRoute?.name || t("noRoute");
+      fillSheet(currentRoute);
+      startFleetWatch();
+    };
 
     function startFallbackMap() {
       if (!globalThis.maplibregl) {
@@ -779,6 +835,7 @@ export async function mountPassenger(root) {
         });
         layer.setVehicles(state.fleet);
         layer.setSelected(state.selectedVehicle);
+        paintPassengerPoint();
         focusMap(active || { path: [point || focusPoint()] });
         const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;
         window.setTimeout(() => {
@@ -797,6 +854,7 @@ export async function mountPassenger(root) {
         layer = createGoogleVehicleLayer(map, { onSelect: (vehicle) => selectVehicle(vehicle) });
         layer.setVehicles(state.fleet);
         layer.setSelected(state.selectedVehicle);
+        paintPassengerPoint();
         focusMap(active || { path: [center] });
         const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 500;
         window.setTimeout(() => {
@@ -823,9 +881,21 @@ export async function mountPassenger(root) {
   });
 
   onSync(({ catalog }) => {
+    const nextSignature = catalogRouteSignature(catalog);
+    const routesChanged = nextSignature !== routeSignature;
+    routeSignature = nextSignature;
     state.catalog = catalog;
     if (state.place) state.place = catalog.places.find((place) => place.id === state.place.id) || state.place;
-    if (!results.hidden) return;
+    if (!results.hidden) {
+      if (!routesChanged) return;
+      const routes = filteredRoutes();
+      const point = focusPoint();
+      const ranked = point ? rankRoutes(routes, point) : routes.map((route) => ({ route, distance: null }));
+      const chosen = routes.find((route) => route.id === state.routeId) || ranked[0]?.route || null;
+      refreshOpenResults?.({ ranked, chosen });
+      return;
+    }
+    if (!routesChanged) return;
     updateZones();
     updateRoutes();
   });

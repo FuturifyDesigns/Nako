@@ -20,6 +20,15 @@ const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
 
+function manualRouteName(id) {
+  if (!id?.startsWith("manual:")) return "";
+  return id.replace(/^manual:(?:(?:taxi|kombi|bus):)?/i, "");
+}
+
+function manualRouteId(type, name) {
+  return `manual:${type}:${name}`;
+}
+
 function normalizePhone(value) {
   let digits = String(value || "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
@@ -272,7 +281,7 @@ function renderRegistration(user, existing) {
   const routeChoices = el("div", { class: "route-checkbox-list" });
   const routeCount = el("span", { class: "route-count", role: "status" });
   const existingOfficial = new Set((existing?.route_ids || []).filter((id) => !id.startsWith("manual:")));
-  const existingManual = (existing?.route_ids || []).filter((id) => id.startsWith("manual:")).map((id) => id.slice(7));
+  const existingManual = (existing?.route_ids || []).filter((id) => id.startsWith("manual:")).map(manualRouteName);
   const manualRoutes = el("textarea", { rows: "4", maxlength: "900", placeholder: "Example:\nMain Mall to Block 8\nStation to Tlokweng Border", "aria-label": "Other routes" });
   manualRoutes.value = existingManual.join("\n");
 
@@ -343,7 +352,7 @@ function renderRegistration(user, existing) {
     const row = {
       user_id: user.id, full_name: fullName.value.trim(), phone: phone.value.trim(), transport_type: type.value,
       vehicle_description: vehicle.value.trim(),
-      plate: plate.value.trim().toUpperCase(), route_ids: [...selectedRoutes, ...typedRoutes.map((route) => `manual:${route}`)],
+      plate: plate.value.trim().toUpperCase(), route_ids: [...selectedRoutes, ...typedRoutes.map((route) => manualRouteId(type.value, route))],
       status: "pending", rejection_message: null, reviewed_at: null, reviewed_by: null
     };
     const { error } = await db.from("driver_profiles").upsert(row);
@@ -361,7 +370,7 @@ function renderRegistration(user, existing) {
 
 function routeLabels(routeIds = []) {
   const official = new Map(currentCatalog().places.flatMap((place) => place.routes.map((route) => [route.id, `${place.name} — ${route.name}`])));
-  return routeIds.map((id) => id.startsWith("manual:") ? id.slice(7) : official.get(id) || id);
+  return routeIds.map((id) => id.startsWith("manual:") ? manualRouteName(id) : official.get(id) || id);
 }
 
 function renderApproved(user, profile) {
@@ -412,7 +421,7 @@ function renderApproved(user, profile) {
     const catalog = currentCatalog();
     const choices = el("div", { class: "route-checkbox-list" });
     const selectedOfficial = new Set((profile.route_ids || []).filter((id) => !id.startsWith("manual:")));
-    const existingManual = (profile.route_ids || []).filter((id) => id.startsWith("manual:")).map((id) => id.slice(7));
+    const existingManual = (profile.route_ids || []).filter((id) => id.startsWith("manual:")).map(manualRouteName);
     const manual = el("textarea", { rows: "4", maxlength: "900", placeholder: "One route per line", "aria-label": "Other routes" });
     manual.value = existingManual.join("\n");
     const options = catalog.places
@@ -442,7 +451,7 @@ function renderApproved(user, profile) {
       event.preventDefault();
       const official = [...choices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
       const typed = [...new Map(manual.value.split(/[\n,;]+/).map((item) => item.trim().replace(/\s+/g, " ")).filter(Boolean).map((item) => [item.toLowerCase(), item])).values()].slice(0, 12);
-      const routeIds = [...official, ...typed.map((item) => `manual:${item}`)];
+      const routeIds = [...official, ...typed.map((item) => manualRouteId(profile.transport_type, item))];
       if (!routeIds.length) {
         message.textContent = "Select a route or enter at least one route name.";
         message.hidden = false;

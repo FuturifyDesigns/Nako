@@ -1,7 +1,7 @@
 import { config } from "./config.js";
 import { haversine } from "./geo.js";
 import { idbGet, idbSet } from "./idb.js";
-import { supabaseClient } from "./sync.js";
+import { currentCatalog, supabaseClient } from "./sync.js";
 
 const CACHE_KEY = "live-vehicles";
 const FRESH_MS = 5 * 60 * 1000;
@@ -9,13 +9,20 @@ const MOTION_FRESH_MS = 15000;
 
 function normalize(row, point) {
   const sampled = new Date(row.sampled_at || row.updated_at || 0).getTime();
+  const routeNames = new Map(currentCatalog().places.flatMap((place) => place.routes.map((route) => [route.id, route.name])));
+  const labels = (row.route_ids || []).map((id) => {
+    if (routeNames.has(id)) return routeNames.get(id);
+    if (id.startsWith("manual:")) return id.replace(/^manual:(?:taxi|kombi|bus):/i, "").replace(/^manual:/i, "");
+    return id;
+  }).filter(Boolean);
   const vehicle = {
     id: row.driver_id,
     plate: row.plate,
     type: row.transport_type,
     routeIds: row.route_ids || [],
     routeId: row.route_ids?.[0] || null,
-    routeName: "Registered route",
+    routeName: labels[0] || "Registered route",
+    routeNames: labels,
     lat: Number(row.lat),
     lng: Number(row.lng),
     accuracy: Number(row.accuracy || 0),

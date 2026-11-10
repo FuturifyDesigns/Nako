@@ -24,6 +24,7 @@ let status = navigator.onLine ? "syncing" : "offline";
 const listeners = new Set();
 let queue = [];
 let flushing = false;
+let cacheHydrated = false;
 
 function emit() {
   for (const listener of listeners) listener({ status, catalog });
@@ -95,10 +96,11 @@ async function pullRemote() {
 export async function refreshCatalog() {
   const local = localCatalog();
   const cached = await idbGet("catalog");
-  if (cached?.places?.length) {
+  if (!cacheHydrated && cached?.places?.length) {
     catalog = cached;
     emit();
   }
+  cacheHydrated = true;
   if (!navigator.onLine) {
     setStatus("offline");
     return catalog;

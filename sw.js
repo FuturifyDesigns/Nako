@@ -1,4 +1,4 @@
-const CACHE = "nakolive-shell-2026-11-10-39";
+const CACHE = "nakolive-shell-2026-11-10-40";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",

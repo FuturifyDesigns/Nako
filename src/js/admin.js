@@ -417,7 +417,7 @@ async function paintRoutes(panel, client) {
         el("span", { text: `${route.place_name || ""} · ${route.transport_type}${route.active === false ? " · hidden" : ""}` })
       ]),
       el("div", { class: "row-actions" }, [
-        el("button", { type: "button", class: "text-button", onclick: () => openEditor(editor, client, route, () => paintRoutes(panel, client)) }, ["Rename"]),
+        el("button", { type: "button", class: "text-button", onclick: () => openEditor(editor, client, route, () => paintRoutes(panel, client)) }, ["Edit"]),
         el("button", { type: "button", class: "text-button muted", onclick: async () => { await setRouteActive(route.id, route.active === false); paintRoutes(panel, client); } }, [route.active === false ? "Publish" : "Hide"])
       ])
     ]));
@@ -428,13 +428,17 @@ function openEditor(host, _client, route, onDone) {
   clear(host);
   const catalog = currentCatalog();
   const name = el("input", { required: "true", minlength: "2", maxlength: "120", value: route?.name || "", placeholder: "Example: Gaborone to Mochudi", "aria-label": "Route name", autofocus: "true" });
+  const type = el("select", { required: "true", "aria-label": "Transport type" }, [
+    ["taxi", "Taxi"], ["kombi", "Kombi"], ["bus", "Bus"]
+  ].map(([value, label]) => el("option", { value, text: label, selected: (route?.transport_type || "kombi") === value ? "selected" : null })));
   const message = el("p", { class: "form-error", hidden: true });
   const form = el("form", { class: "stack editor-form simple-route-editor" }, [
-    el("h3", { text: route ? "Rename route" : "Add route" }),
+    el("h3", { text: route ? "Edit route" : "Add route" }),
     el("label", { class: "field-label" }, [el("span", { text: "Route name" }), name]),
+    el("label", { class: "field-label" }, [el("span", { text: "Transport type" }), type]),
     message,
     el("div", { class: "location-actions" }, [
-      el("button", { class: "find compact", type: "submit", text: route ? "Save name" : "Add route" }),
+      el("button", { class: "find compact", type: "submit", text: route ? "Save route" : "Add route" }),
       el("button", { type: "button", class: "ghost", onclick: () => clear(host) }, ["Cancel"])
     ])
   ]);
@@ -444,7 +448,7 @@ function openEditor(host, _client, route, onDone) {
     message.hidden = true;
     if (!form.reportValidity()) return;
     try {
-      const saved = await persistSimpleRoute(route, name.value, catalog);
+      const saved = await persistSimpleRoute(route, name.value, type.value, catalog);
       if (saved.queued) message.textContent = "Saved on this phone. It will publish when you are back online.";
       else message.textContent = "";
       await refreshCatalog();
@@ -467,14 +471,13 @@ function inferRouteParts(name, catalog) {
   return {
     clean,
     place,
-    type: /\bbus\b/i.test(clean) ? "bus" : "kombi",
     origin: parts[0] || clean,
     destination: parts[1] || clean
   };
 }
 
-async function persistSimpleRoute(route, value, catalog) {
-  const { clean, place, type, origin, destination } = inferRouteParts(value, catalog);
+async function persistSimpleRoute(route, value, type, catalog) {
+  const { clean, place, origin, destination } = inferRouteParts(value, catalog);
   const path = Array.isArray(route?.path) && route.path.length >= 2
     ? route.path
     : [{ lat: Number(place.lat), lng: Number(place.lng) - 0.0002 }, { lat: Number(place.lat), lng: Number(place.lng) + 0.0002 }];
@@ -483,7 +486,7 @@ async function persistSimpleRoute(route, value, catalog) {
     place_id: route?.place_id || place.id,
     zone_id: route?.zone_id || null,
     name: clean,
-    transport_type: route?.transport_type || type,
+    transport_type: type,
     origin_name: route?.origin_name || origin,
     destination_name: route?.destination_name || destination,
     summary: route?.summary || "",

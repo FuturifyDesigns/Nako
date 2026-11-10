@@ -74,7 +74,7 @@ function nest(local, rows) {
       ...place,
       landmarks: landmarks.get(place.id) || [],
       zones: rows.zones.filter((zone) => zone.place_id === place.id && zone.active !== false).sort((a, b) => (a.sort || 0) - (b.sort || 0)),
-      routes: rows.routes.filter((route) => route.place_id === place.id && route.active !== false && route.transport_type !== "taxi")
+      routes: rows.routes.filter((route) => route.place_id === place.id && route.active !== false)
     }))
   };
 }

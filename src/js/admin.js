@@ -1,6 +1,7 @@
 import { el, clear } from "./dom.js";
-import { suggestPlaces } from "./geo.js";
-import { adminSummary, currentCatalog, onSync, refreshCatalog, savePlace, saveRoute, saveZone, setRouteActive, slugify, startSync, supabaseClient } from "./sync.js";
+import { adminSummary, currentCatalog, onSync, refreshCatalog, saveRoute, setRouteActive, slugify, startSync, supabaseClient } from "./sync.js";
+
+const routePaintVersion = new WeakMap();
 
 export async function mountAdmin(root) {
   const client = supabaseClient();
@@ -137,7 +138,6 @@ function renderDashboard(root, client) {
   ]));
 
   async function load() {
-    paintRoutes(routesPanel, client);
     if (!applicationsMounted) {
       applicationsMounted = true;
       paintApplications(applicationsPanel, client);
@@ -158,8 +158,15 @@ function renderDashboard(root, client) {
     }
   }
 
+  routesPanel.append(el("p", { class: "hint", text: "Loading routes…" }));
+  paintRoutes(routesPanel, client);
   load();
-  onSync(() => paintRoutes(routesPanel, client));
+  let routeRefreshTimer;
+  onSync(() => {
+    if (routesPanel.querySelector(".editor-form")) return;
+    window.clearTimeout(routeRefreshTimer);
+    routeRefreshTimer = window.setTimeout(() => paintRoutes(routesPanel, client), 180);
+  });
   window.setInterval(() => { if (!document.hidden) load(); }, 30000);
 }
 
@@ -373,139 +380,73 @@ async function loadAllRoutes(client) {
   return (data || []).map((route) => ({ ...route, place_name: route.places?.name || route.place_id }));
 }
 
-function paintRoutes(panel, client) {
-  clear(panel);
+async function paintRoutes(panel, client) {
+  const version = (routePaintVersion.get(panel) || 0) + 1;
+  routePaintVersion.set(panel, version);
+  let routes;
+  try {
+    routes = await loadAllRoutes(client);
+  } catch {
+    if (routePaintVersion.get(panel) !== version || panel.querySelector(".route-table")) return;
+    clear(panel);
+    panel.append(el("p", { class: "hint", text: "Routes could not be loaded. They remain saved for passengers who already synced." }));
+    return;
+  }
+  if (routePaintVersion.get(panel) !== version) return;
+
   const list = el("div", { class: "route-table" });
   const editor = el("div", { class: "editor" });
+  clear(panel);
   panel.append(
     el("div", { class: "step-row" }, [
       el("h2", { text: "Routes" }),
       el("button", { type: "button", class: "ghost", onclick: () => openEditor(editor, client, null, () => paintRoutes(panel, client)) }, ["Add route"])
     ]),
-    el("p", { class: "hint", text: "Add a route for any town in Botswana. It appears in the passenger route selector after sync. Paths marked approximate can be redrawn." }),
+    el("p", { class: "hint", text: "Add a route using its name. NakoLive automatically organises the technical details." }),
     editor,
     list
   );
-  loadAllRoutes(client).then((routes) => {
-    if (!routes.length) {
-      list.append(el("p", { class: "hint", text: "No routes yet." }));
-      return;
-    }
-    for (const route of routes) {
-      list.append(el("article", { class: "route-row" }, [
-        el("div", {}, [
-          el("strong", { text: route.name }),
-          el("span", { text: `${route.place_name || ""} · ${route.transport_type}${route.active === false ? " · hidden" : ""}${route.guide ? " · approximate path" : ""}` })
-        ]),
-        el("div", { class: "row-actions" }, [
-          el("button", { type: "button", class: "text-button", onclick: () => openEditor(editor, client, route, () => paintRoutes(panel, client)) }, ["Edit"]),
-          el("button", { type: "button", class: "text-button muted", onclick: async () => { await setRouteActive(route.id, route.active === false); paintRoutes(panel, client); } }, [route.active === false ? "Publish" : "Hide"])
-        ])
-      ]));
-    }
-  }).catch(() => {
-    list.append(el("p", { class: "hint", text: "Routes could not be loaded. They remain saved for passengers who already synced." }));
-  });
+  if (!routes.length) {
+    list.append(el("p", { class: "hint", text: "No routes yet." }));
+    return;
+  }
+  for (const route of routes) {
+    list.append(el("article", { class: "route-row" }, [
+      el("div", {}, [
+        el("strong", { text: route.name }),
+        el("span", { text: `${route.place_name || ""} · ${route.transport_type}${route.active === false ? " · hidden" : ""}` })
+      ]),
+      el("div", { class: "row-actions" }, [
+        el("button", { type: "button", class: "text-button", onclick: () => openEditor(editor, client, route, () => paintRoutes(panel, client)) }, ["Rename"]),
+        el("button", { type: "button", class: "text-button muted", onclick: async () => { await setRouteActive(route.id, route.active === false); paintRoutes(panel, client); } }, [route.active === false ? "Publish" : "Hide"])
+      ])
+    ]));
+  }
 }
 
-function openEditor(host, client, route, onDone) {
+function openEditor(host, _client, route, onDone) {
   clear(host);
   const catalog = currentCatalog();
-  const editorField = (label, control, hint = "") => el("label", { class: "field-label" }, [
-    el("span", { text: label }), control, hint ? el("small", { text: hint }) : null
-  ]);
-  const placeSelect = el("select", { "aria-label": "Town" });
-  placeSelect.append(el("option", { value: "", text: "Choose a town" }));
-  for (const place of catalog.places) placeSelect.append(el("option", { value: place.id, text: place.name }));
-  placeSelect.append(el("option", { value: "__new", text: "Add a town or village" }));
-  const newPlace = el("div", { class: "stack", hidden: true });
-  const placeName = el("input", { placeholder: "Town name", "aria-label": "New town name" });
-  const placeKind = el("select", { "aria-label": "Kind" }, ["city", "town", "village"].map((kind) => el("option", { value: kind, text: kind })));
-  const placeLat = el("input", { placeholder: "Latitude", "aria-label": "Latitude" });
-  const placeLng = el("input", { placeholder: "Longitude", "aria-label": "Longitude" });
-  newPlace.append(placeName, placeKind, placeLat, placeLng, el("button", { type: "button", class: "ghost", onclick: async () => {
-    const matches = suggestPlaces(placeName.value, catalog);
-    if (matches[0]?.type === "place") {
-      placeLat.value = matches[0].place.lat;
-      placeLng.value = matches[0].place.lng;
-      return;
-    }
-    try {
-      const url = new URL("https://nominatim.openstreetmap.org/search");
-      url.searchParams.set("q", `${placeName.value}, Botswana`);
-      url.searchParams.set("countrycodes", "bw");
-      url.searchParams.set("format", "jsonv2");
-      url.searchParams.set("limit", "1");
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
-      const rows = await response.json();
-      if (rows[0]) {
-        placeLat.value = rows[0].lat;
-        placeLng.value = rows[0].lon;
-      }
-    } catch {
-      placeLat.placeholder = "Type latitude manually";
-    }
-  } }, ["Find coordinates"]));
-
-  const zoneSelect = el("select", { "aria-label": "Zone" });
-  const newZone = el("input", { placeholder: "Or type a new locality", "aria-label": "New locality" });
-  const name = el("input", { value: route?.name || "", placeholder: "Route name", "aria-label": "Route name" });
-  const type = el("select", { "aria-label": "Transport" }, ["kombi", "taxi", "bus"].map((item) => el("option", { value: item, text: item, selected: route?.transport_type === item ? "selected" : null })));
-  const origin = el("input", { value: route?.origin_name || "", placeholder: "Origin", "aria-label": "Origin" });
-  const destination = el("input", { value: route?.destination_name || "", placeholder: "Destination", "aria-label": "Destination" });
-  const summary = el("textarea", { placeholder: "Short description passengers will read", "aria-label": "Summary" });
-  summary.value = route?.summary || "";
-  const path = Array.isArray(route?.path) ? route.path.map((point) => ({ ...point })) : [];
-  const pathLabel = el("p", { class: "hint", text: pathText(path) });
-  const mapBox = el("div", { class: "editor-map" });
+  const name = el("input", { required: "true", minlength: "2", maxlength: "120", value: route?.name || "", placeholder: "Example: Gaborone to Mochudi", "aria-label": "Route name", autofocus: "true" });
   const message = el("p", { class: "form-error", hidden: true });
-
-  function fillZones() {
-    clear(zoneSelect);
-    zoneSelect.append(el("option", { value: "", text: "No locality filter" }));
-    const place = catalog.places.find((item) => item.id === placeSelect.value);
-    for (const zone of place?.zones || []) zoneSelect.append(el("option", { value: zone.id, text: zone.name }));
-    if (route?.zone_id) zoneSelect.value = route.zone_id;
-  }
-
-  placeSelect.value = route?.place_id || catalog.places.find((place) => place.name === "Gaborone")?.id || "";
-  placeSelect.addEventListener("change", () => {
-    newPlace.hidden = placeSelect.value !== "__new";
-    fillZones();
-  });
-  fillZones();
-
-  let map;
-  host.append(el("form", { class: "stack editor-form" }, [
-    el("h3", { text: route ? "Edit route" : "New route" }),
-    editorField("Town or village", placeSelect),
-    newPlace,
-    el("div", { class: "form-grid" }, [editorField("Locality", zoneSelect), editorField("New locality (optional)", newZone)]),
-    editorField("Route name", name),
-    editorField("Transport type", type),
-    el("div", { class: "form-grid" }, [editorField("Route starts at", origin), editorField("Route ends at", destination)]),
-    editorField("Passenger description", summary, "Keep this short and easy to understand."),
-    el("div", { class: "editor-map-head" }, [el("strong", { text: "Route path" }), el("span", { text: "Tap the map in travel order" })]),
-    mapBox,
-    el("div", { class: "location-actions" }, [
-      el("button", { type: "button", class: "ghost", onclick: () => { path.pop(); pathLabel.textContent = pathText(path); draw(); } }, ["Undo point"]),
-      el("button", { type: "button", class: "ghost", onclick: () => { path.length = 0; pathLabel.textContent = pathText(path); draw(); } }, ["Clear path"])
-    ]),
-    pathLabel,
+  const form = el("form", { class: "stack editor-form simple-route-editor" }, [
+    el("h3", { text: route ? "Rename route" : "Add route" }),
+    el("label", { class: "field-label" }, [el("span", { text: "Route name" }), name]),
     message,
     el("div", { class: "location-actions" }, [
-      el("button", { class: "find", type: "submit", text: "Save route" }),
-      el("button", { type: "button", class: "ghost", onclick: () => { map?.remove(); clear(host); } }, ["Cancel"])
+      el("button", { class: "find compact", type: "submit", text: route ? "Save name" : "Add route" }),
+      el("button", { type: "button", class: "ghost", onclick: () => clear(host) }, ["Cancel"])
     ])
-  ]));
-  host.querySelector("form").addEventListener("submit", async (event) => {
+  ]);
+  host.append(form);
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     message.hidden = true;
+    if (!form.reportValidity()) return;
     try {
-      const saved = await persist({ client, route, placeSelect, placeName, placeKind, placeLat, placeLng, zoneSelect, newZone, name, type, origin, destination, summary, path });
+      const saved = await persistSimpleRoute(route, name.value, catalog);
       if (saved.queued) message.textContent = "Saved on this phone. It will publish when you are back online.";
       else message.textContent = "";
-      map?.remove();
       await refreshCatalog();
       onDone();
     } catch (error) {
@@ -513,93 +454,41 @@ function openEditor(host, client, route, onDone) {
       message.textContent = error.message || "The route could not be saved.";
     }
   });
-
-  if (globalThis.maplibregl) {
-    const center = path[0] || { lng: 25.9231, lat: -24.6282 };
-    map = new maplibregl.Map({
-      container: mapBox,
-      style: "https://tiles.openfreemap.org/styles/positron",
-      center: [center.lng, center.lat],
-      zoom: 12
-    });
-    map.on("load", () => {
-      map.addSource("draft", { type: "geojson", data: emptyFeature() });
-      map.addLayer({ id: "draft-line", type: "line", source: "draft", paint: { "line-color": "#1f6feb", "line-width": 4 } });
-      draw();
-    });
-    map.on("click", (event) => {
-      path.push({ lat: event.lngLat.lat, lng: event.lngLat.lng });
-      pathLabel.textContent = pathText(path);
-      draw();
-    });
-  }
-
-  function draw() {
-    const source = map?.getSource("draft");
-    if (!source) return;
-    source.setData({
-      type: "Feature",
-      properties: {},
-      geometry: { type: "LineString", coordinates: path.map((point) => [point.lng, point.lat]) }
-    });
-  }
+  name.focus();
 }
 
-function emptyFeature() {
-  return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [] } };
+function inferRouteParts(name, catalog) {
+  const clean = name.trim().replace(/\s+/g, " ");
+  const place = catalog.places.find((item) => clean.toLowerCase().includes(item.name.toLowerCase()))
+    || catalog.places.find((item) => item.name === "Gaborone")
+    || catalog.places[0];
+  if (!place) throw new Error("No active town is available for this route.");
+  const parts = clean.split(/\s+(?:to|–|—|-)\s+/i);
+  return {
+    clean,
+    place,
+    type: /\bbus\b/i.test(clean) ? "bus" : "kombi",
+    origin: parts[0] || clean,
+    destination: parts[1] || clean
+  };
 }
 
-function pathText(path) {
-  if (path.length < 2) return "Click the map to draw the corridor. At least two points are required.";
-  return `${path.length} points on this corridor.`;
-}
-
-async function persist(fields) {
-  let placeId = fields.placeSelect.value;
-  if (!fields.name.value.trim() || !fields.origin.value.trim() || !fields.destination.value.trim()) {
-    throw new Error("Name, origin, and destination are required.");
-  }
-  if (fields.path.length < 2) throw new Error("Draw at least two points on the map.");
-  if (placeId === "__new") {
-    if (!fields.placeName.value.trim() || !fields.placeLat.value || !fields.placeLng.value) throw new Error("New towns need a name and coordinates.");
-    placeId = slugify(fields.placeName.value);
-    const placeResult = await savePlace({
-      id: placeId,
-      name: fields.placeName.value.trim(),
-      kind: fields.placeKind.value,
-      lat: Number(fields.placeLat.value),
-      lng: Number(fields.placeLng.value),
-      popular: false,
-      active: true
-    });
-    if (placeResult.error && !placeResult.queued) throw new Error("The town could not be saved.");
-  }
-  if (!placeId) throw new Error("Choose a town.");
-  let zoneId = fields.zoneSelect.value || null;
-  if (fields.newZone.value.trim()) {
-    zoneId = `${placeId}-${slugify(fields.newZone.value)}`;
-    await saveZone({
-      id: zoneId,
-      place_id: placeId,
-      name: fields.newZone.value.trim(),
-      summary: fields.newZone.value.trim(),
-      lat: fields.path[0].lat,
-      lng: fields.path[0].lng,
-      sort: 10,
-      active: true
-    });
-  }
+async function persistSimpleRoute(route, value, catalog) {
+  const { clean, place, type, origin, destination } = inferRouteParts(value, catalog);
+  const path = Array.isArray(route?.path) && route.path.length >= 2
+    ? route.path
+    : [{ lat: Number(place.lat), lng: Number(place.lng) - 0.0002 }, { lat: Number(place.lat), lng: Number(place.lng) + 0.0002 }];
   return saveRoute({
-    id: fields.route?.id || `${placeId}-${fields.type.value}-${slugify(fields.name.value)}-${crypto.randomUUID().slice(0, 4)}`,
-    place_id: placeId,
-    zone_id: zoneId,
-    name: fields.name.value.trim(),
-    transport_type: fields.type.value,
-    origin_name: fields.origin.value.trim(),
-    destination_name: fields.destination.value.trim(),
-    summary: fields.summary.value.trim(),
-    path: fields.path,
-    guide: true,
-    active: fields.route?.active !== false
+    id: route?.id || `${place.id}-${type}-${slugify(clean)}-${crypto.randomUUID().slice(0, 4)}`,
+    place_id: route?.place_id || place.id,
+    zone_id: route?.zone_id || null,
+    name: clean,
+    transport_type: route?.transport_type || type,
+    origin_name: route?.origin_name || origin,
+    destination_name: route?.destination_name || destination,
+    summary: route?.summary || "",
+    path,
+    guide: route?.guide ?? false,
+    active: route?.active !== false
   });
 }

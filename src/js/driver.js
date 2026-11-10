@@ -371,7 +371,6 @@ function renderApproved(user, profile) {
     bus: { title: "Bus driver console", kicker: "BUS OPERATIONS", image: "bus.png", copy: "Share your position during service so passengers can see your bus and movement status." }
   };
   const role = roles[profile.transport_type] || roles.taxi;
-  const assignedRoutes = routeLabels(profile.route_ids);
   const status = el("strong", { class: "share-state", text: "Location is off" });
   const detail = el("p", { class: "hint", text: "Passengers cannot see this vehicle until you turn location on." });
   const consent = el("input", { type: "checkbox", id: "location-consent" });
@@ -392,6 +391,84 @@ function renderApproved(user, profile) {
     if (text) warning.append(el("strong", { text: "Administrator warning" }), el("p", { text }));
   }
   paintWarning(profile.warning_message);
+  const routeCount = el("span");
+  const routeChips = el("div", { class: "driver-route-chips" });
+  const routeEditor = el("section", { class: "form-section route-picker approved-route-editor", hidden: true });
+  const manageRoutes = el("button", { type: "button", class: "ghost compact-route-action", text: "Change routes" });
+
+  function paintAssignedRoutes() {
+    const assignedRoutes = routeLabels(profile.route_ids);
+    routeCount.textContent = `${assignedRoutes.length} total`;
+    clear(routeChips);
+    routeChips.append(...(assignedRoutes.length
+      ? assignedRoutes.map((route) => el("span", { text: route }))
+      : [el("p", { class: "hint", text: "No routes saved." })]));
+  }
+
+  function openRouteEditor() {
+    clear(routeEditor);
+    routeEditor.hidden = false;
+    manageRoutes.hidden = true;
+    const catalog = currentCatalog();
+    const choices = el("div", { class: "route-checkbox-list" });
+    const selectedOfficial = new Set((profile.route_ids || []).filter((id) => !id.startsWith("manual:")));
+    const existingManual = (profile.route_ids || []).filter((id) => id.startsWith("manual:")).map((id) => id.slice(7));
+    const manual = el("textarea", { rows: "4", maxlength: "900", placeholder: "One route per line", "aria-label": "Other routes" });
+    manual.value = existingManual.join("\n");
+    const options = catalog.places
+      .flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name })))
+      .filter((route) => route.transport_type === profile.transport_type);
+    for (const route of options) {
+      choices.append(el("label", { class: "route-checkbox" }, [
+        el("input", { type: "checkbox", value: route.id, checked: selectedOfficial.has(route.id) }),
+        el("span", {}, [el("strong", { text: route.name }), el("small", { text: route.placeName })])
+      ]));
+    }
+    if (!options.length) choices.append(el("p", { class: "hint", text: "No published routes are available yet. Add route names below." }));
+    const message = el("p", { class: "form-error", hidden: true });
+    const save = el("button", { type: "submit", class: "find compact", text: "Save routes" });
+    const form = el("form", { class: "stack" }, [
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Change your routes" }), el("span", { text: profile.transport_type })]),
+      el("p", { class: "hint", text: "Select, remove or add every route you currently operate." }),
+      choices,
+      el("label", { class: "field-label" }, [el("span", { text: "Other routes — one per line" }), manual]),
+      message,
+      el("div", { class: "location-actions" }, [
+        save,
+        el("button", { type: "button", class: "ghost", onclick: () => { routeEditor.hidden = true; manageRoutes.hidden = false; } }, ["Cancel"])
+      ])
+    ]);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const official = [...choices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+      const typed = [...new Map(manual.value.split(/[\n,;]+/).map((item) => item.trim().replace(/\s+/g, " ")).filter(Boolean).map((item) => [item.toLowerCase(), item])).values()].slice(0, 12);
+      const routeIds = [...official, ...typed.map((item) => `manual:${item}`)];
+      if (!routeIds.length) {
+        message.textContent = "Select a route or enter at least one route name.";
+        message.hidden = false;
+        return;
+      }
+      save.disabled = true;
+      save.textContent = "Saving…";
+      const { error } = await db.rpc("update_driver_routes", { p_route_ids: routeIds });
+      save.disabled = false;
+      save.textContent = "Save routes";
+      if (error) {
+        message.textContent = "The routes could not be saved. Please try again.";
+        message.hidden = false;
+        return;
+      }
+      profile.route_ids = routeIds;
+      paintAssignedRoutes();
+      routeEditor.hidden = true;
+      manageRoutes.hidden = false;
+      notify("Your routes were updated.");
+    });
+    routeEditor.append(form);
+  }
+
+  manageRoutes.addEventListener("click", openRouteEditor);
+  paintAssignedRoutes();
   button.addEventListener("click", () => {
     if (watchId != null) {
       stopSharing(true, status, detail, button);
@@ -411,11 +488,13 @@ function renderApproved(user, profile) {
     ]),
     el("p", { class: "driver-role-copy", text: role.copy }),
     warning,
-    el("div", { class: "approval-pop" }, [el("strong", { text: "Approved and ready" }), el("p", { text: "Turn on location only while you are operating. Updates are delayed slightly to reduce data use." })]),
+    el("div", { class: "approval-pop" }, [el("strong", { text: "Approved and ready" }), el("p", { text: "Turn on location only while you are operating. Your live position updates automatically." })]),
     el("section", { class: "driver-route-summary" }, [
-      el("div", { class: "form-section-head" }, [el("strong", { text: "Your routes" }), el("span", { text: `${assignedRoutes.length} total` })]),
-      el("div", { class: "driver-route-chips" }, assignedRoutes.length ? assignedRoutes.map((route) => el("span", { text: route })) : [el("p", { class: "hint", text: "No routes saved." })])
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Your routes" }), routeCount]),
+      routeChips,
+      manageRoutes
     ]),
+    routeEditor,
     el("section", { class: "driver-share-panel" }, [
       status, detail, consentLabel, button,
       el("p", { class: "background-location-note", text: "Location can keep updating while the PWA remains allowed to run in the background. Fully closing or force-stopping the app pauses GPS updates until NakoLive is opened again." })

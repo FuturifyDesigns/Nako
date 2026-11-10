@@ -463,6 +463,36 @@ create or replace function public.stop_driver_location()
 returns void language sql security definer set search_path = public
 as $$ update public.driver_locations set sharing = false, updated_at = now() where driver_id = auth.uid(); $$;
 
+create or replace function public.update_driver_routes(p_route_ids text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  clean_routes text[];
+begin
+  select coalesce(array_agg(distinct trim(route_id)), '{}')
+  into clean_routes
+  from unnest(coalesce(p_route_ids, '{}')) as routes(route_id)
+  where char_length(trim(route_id)) between 2 and 140;
+
+  if coalesce(array_length(clean_routes, 1), 0) < 1 then
+    raise exception 'at least one route is required';
+  end if;
+  if array_length(clean_routes, 1) > 20 then
+    raise exception 'too many routes';
+  end if;
+
+  update public.driver_profiles
+  set route_ids = clean_routes
+  where user_id = auth.uid() and status = 'approved';
+
+  if not found then raise exception 'approved driver not found'; end if;
+  return jsonb_build_object('ok', true, 'route_ids', clean_routes);
+end;
+$$;
+
 create or replace function public.review_driver(p_driver_id uuid, p_status text, p_message text default null)
 returns void language plpgsql security definer set search_path = public
 as $$
@@ -529,6 +559,8 @@ revoke all on function public.publish_driver_location(double precision, double p
 grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) to authenticated;
 revoke all on function public.stop_driver_location() from public;
 grant execute on function public.stop_driver_location() to authenticated;
+revoke all on function public.update_driver_routes(text[]) from public;
+grant execute on function public.update_driver_routes(text[]) to authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;

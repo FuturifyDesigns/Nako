@@ -653,6 +653,9 @@ html[data-mode="gate"] #app { display: none; }
 .driver-role-kicker { margin: 0; color: #a9dcff; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
 .driver-role-copy { margin: 0; color: var(--muted); line-height: 1.55; }
 .driver-route-summary, .driver-share-panel { display: grid; gap: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 17px; background: #fff; }
+.compact-route-action { justify-self: start; min-height: 40px; padding: 8px 14px; color: #155ba4; border-color: #9fc5ef; background: #eaf4ff; font-weight: 850; }
+.approved-route-editor { background: #f7fbff; border-color: #b9d6f4; }
+.simple-route-editor { max-width: 560px; }
 .driver-share-panel .find { margin-top: 2px; }
 .driver-shell-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .driver-shell-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin-left: auto; }

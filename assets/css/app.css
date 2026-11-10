@@ -613,8 +613,12 @@ html[data-mode="gate"] #app { display: none; }
 .application-routes { display: grid; gap: 7px; padding: 11px; border-radius: 13px; background: #f6f9fc; }
 .application-routes > strong { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .application-route-chips, .driver-route-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.application-route-chips span, .driver-route-chips span { padding: 6px 8px; border-radius: 9px; background: #e7f1ff; color: #174f94; font-size: 11px; font-weight: 750; }
+.application-route-chips > span, .driver-route-chips > span { padding: 6px 8px; border-radius: 9px; background: #e7f1ff; color: #174f94; font-size: 11px; font-weight: 750; }
+.application-route-chips > span { display: inline-flex; align-items: center; gap: 6px; }
 .application-route-chips span.is-manual { background: #fff3d8; color: #8b5b00; }
+.route-chip-delete { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: rgba(163,38,38,.1); color: #a32626; font-size: 16px; font-weight: 900; line-height: 1; }
+.route-chip-delete:hover { background: #a32626; color: #fff; }
+.route-delete { color: #b42318; }
 .moderation-note { padding: 11px 12px; border: 1px solid #f1cf7d; border-radius: 13px; background: #fff9ea; }
 .moderation-note.is-banned { border-color: #e8aaaa; background: #fff2f2; }
 .moderation-note p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }

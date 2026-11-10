@@ -248,6 +248,10 @@ function timeAgo(value) {
   return `${Math.round(hours / 24)} d ago`;
 }
 
+function manualRouteLabel(id) {
+  return id.replace(/^manual:(?:(?:taxi|kombi|bus):)?/i, "");
+}
+
 function paintApplications(panel, client) {
   clear(panel);
   let activeType = "taxi";
@@ -288,7 +292,8 @@ function paintApplications(panel, client) {
 
   function applicationCard(profile) {
     const routes = (profile.route_ids || []).map((id) => ({
-      name: id.startsWith("manual:") ? id.slice(7) : routeNames.get(id) || id,
+      id,
+      name: id.startsWith("manual:") ? manualRouteLabel(id) : routeNames.get(id) || id,
       manual: id.startsWith("manual:")
     }));
     const approved = profile.status === "approved";
@@ -326,6 +331,14 @@ function paintApplications(panel, client) {
             : "Driver profile deleted.";
       if (!error) window.setTimeout(load, 450);
     }
+    async function removeDriverRoute(route) {
+      if (!window.confirm(`Remove “${route.name}” from ${profile.full_name}? Passengers will no longer see this route for the driver.`)) return;
+      feedback.textContent = "Removing route…";
+      feedback.hidden = false;
+      const { error } = await client.rpc("admin_remove_driver_route", { p_driver_id: profile.user_id, p_route_id: route.id });
+      feedback.textContent = error ? "The route could not be removed." : "Route removed from the driver.";
+      if (!error) window.setTimeout(load, 350);
+    }
     const actions = approved
       ? [
           el("button", { type: "button", class: "ghost moderation-warn", onclick: () => moderate("warn") }, ["Warn driver"]),
@@ -350,7 +363,10 @@ function paintApplications(panel, client) {
       el("div", { class: "application-routes" }, [
         el("strong", { text: `Routes (${routes.length})` }),
         el("div", { class: "application-route-chips" }, routes.length
-          ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "", text: route.manual ? `${route.name} · manual` : route.name }))
+          ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "" }, [
+              el("span", { text: route.manual ? `${route.name} · manual` : route.name }),
+              el("button", { type: "button", class: "route-chip-delete", "aria-label": `Remove ${route.name} from ${profile.full_name}`, onclick: () => removeDriverRoute(route) }, ["×"])
+            ]))
           : [el("span", { text: "No routes supplied" })])
       ]),
       approved && profile.warning_message ? el("div", { class: "moderation-note" }, [
@@ -418,7 +434,15 @@ async function paintRoutes(panel, client) {
       ]),
       el("div", { class: "row-actions" }, [
         el("button", { type: "button", class: "text-button", onclick: () => openEditor(editor, client, route, () => paintRoutes(panel, client)) }, ["Edit"]),
-        el("button", { type: "button", class: "text-button muted", onclick: async () => { await setRouteActive(route.id, route.active === false); paintRoutes(panel, client); } }, [route.active === false ? "Publish" : "Hide"])
+        el("button", { type: "button", class: "text-button muted", onclick: async () => { await setRouteActive(route.id, route.active === false); paintRoutes(panel, client); } }, [route.active === false ? "Publish" : "Hide"]),
+        el("button", { type: "button", class: "text-button route-delete", onclick: async (event) => {
+          if (!window.confirm(`Permanently delete “${route.name}”? It will also be removed from every driver using it.`)) return;
+          event.currentTarget.disabled = true;
+          const { error } = await client.rpc("admin_delete_route", { p_route_id: route.id });
+          if (error) { window.alert("The route could not be deleted."); event.currentTarget.disabled = false; return; }
+          await refreshCatalog();
+          paintRoutes(panel, client);
+        } }, ["Delete"])
       ])
     ]));
   }

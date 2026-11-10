@@ -598,6 +598,51 @@ begin
 end;
 $$;
 
+create or replace function public.admin_remove_driver_route(p_driver_id uuid, p_route_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'not allowed'; end if;
+  if nullif(trim(p_route_id), '') is null then raise exception 'route required'; end if;
+
+  update public.driver_profiles
+  set route_ids = array_remove(route_ids, p_route_id)
+  where user_id = p_driver_id;
+
+  update public.driver_locations
+  set route_ids = array_remove(route_ids, p_route_id), updated_at = now()
+  where driver_id = p_driver_id;
+
+  if p_route_id like 'manual:%' and not exists (
+    select 1 from public.driver_profiles
+    where status = 'approved' and p_route_id = any(route_ids)
+  ) then
+    delete from public.routes where id = p_route_id;
+  end if;
+end;
+$$;
+
+create or replace function public.admin_delete_route(p_route_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'not allowed'; end if;
+  if nullif(trim(p_route_id), '') is null then raise exception 'route required'; end if;
+
+  update public.driver_profiles set route_ids = array_remove(route_ids, p_route_id)
+  where p_route_id = any(route_ids);
+  update public.driver_locations set route_ids = array_remove(route_ids, p_route_id), updated_at = now()
+  where p_route_id = any(route_ids);
+  delete from public.routes where id = p_route_id;
+end;
+$$;
+
 alter table public.driver_profiles enable row level security;
 alter table public.driver_locations enable row level security;
 
@@ -628,6 +673,10 @@ revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;
 grant execute on function public.moderate_driver(uuid, text, text) to authenticated;
+revoke all on function public.admin_remove_driver_route(uuid, text) from public;
+grant execute on function public.admin_remove_driver_route(uuid, text) to authenticated;
+revoke all on function public.admin_delete_route(text) from public;
+grant execute on function public.admin_delete_route(text) to authenticated;
 
 do $$
 begin

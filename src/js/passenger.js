@@ -282,7 +282,14 @@ export async function mountPassenger(root) {
 
   function filteredRoutes() {
     if (!state.place) return [];
-    return state.place.routes.filter((route) => route.transport_type === state.transport && (state.zoneId === "all" || route.zone_id === state.zoneId));
+    const localRoutes = state.place.routes
+      .filter((route) => route.transport_type === state.transport)
+      .map((route) => ({ ...route, placeName: state.place.name }));
+    const localIds = new Set(localRoutes.map((route) => route.id));
+    const networkRoutes = state.catalog.places.flatMap((place) => place.routes
+      .filter((route) => route.transport_type === state.transport && !localIds.has(route.id))
+      .map((route) => ({ ...route, placeName: place.name })));
+    return [...localRoutes, ...networkRoutes.sort((a, b) => a.placeName.localeCompare(b.placeName) || a.name.localeCompare(b.name))];
   }
 
   function focusPoint() {
@@ -300,9 +307,12 @@ export async function mountPassenger(root) {
     const placeName = state.place?.name || "";
     routeSelect.append(el("option", {
       value: "all",
-      text: state.place ? t("allRoutes", { place: placeName, count: String(routes.length) }) : t("chooseTownFirst")
+      text: state.place ? t("allNetworkRoutes", { count: String(routes.length) }) : t("chooseTownFirst")
     }));
-    for (const route of routes) routeSelect.append(el("option", { value: route.id, text: route.name }));
+    for (const route of routes) {
+      const outsideSelectedTown = route.placeName && route.placeName !== placeName;
+      routeSelect.append(el("option", { value: route.id, text: outsideSelectedTown ? `${route.name} · ${route.placeName}` : route.name }));
+    }
     state.routeId = routes.some((route) => route.id === previous) ? previous : "all";
     routeSelect.value = state.routeId;
     routeSelect.disabled = !state.place;

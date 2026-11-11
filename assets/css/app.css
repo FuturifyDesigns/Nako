@@ -610,6 +610,9 @@ html[data-mode="gate"] #app { display: none; }
 .application-route-chips span.is-manual { background: #fff3d8; color: #8b5b00; }
 .route-chip-delete { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: rgba(163,38,38,.1); color: #a32626; font-size: 16px; font-weight: 900; line-height: 1; }
 .route-chip-delete:hover { background: #a32626; color: #fff; }
+.route-chip-edit { min-height: 24px; padding: 3px 8px; border: 1px solid #9fc5ef; border-radius: 999px; background: #fff; color: #155ba4; font-size: 10px; font-weight: 850; }
+.route-chip-edit:hover { border-color: #5e9ee3; background: #eaf4ff; }
+.shared-route-warning { margin: 0; padding: 10px 12px; border: 1px solid #f0cf85; border-radius: 12px; background: #fff8e5; color: #6f4b00; font-size: 12px; font-weight: 750; line-height: 1.45; }
 .route-delete { color: #b42318; }
 .moderation-note { padding: 11px 12px; border: 1px solid #f1cf7d; border-radius: 13px; background: #fff9ea; }
 .moderation-note.is-banned { border-color: #e8aaaa; background: #fff2f2; }

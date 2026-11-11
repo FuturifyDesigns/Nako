@@ -270,8 +270,6 @@ function splitRouteNames(value) {
 function paintApplications(panel, client) {
   clear(panel);
   let activeType = "taxi";
-  const catalog = currentCatalog();
-  const routeNames = new Map(catalog.places.flatMap((place) => place.routes.map((route) => [route.id, `${place.name} — ${route.name}`])));
   const tabs = el("div", { class: "admin-tabs", role: "tablist" });
   const list = el("div", { class: "application-list" });
   panel.append(
@@ -306,10 +304,12 @@ function paintApplications(panel, client) {
   }
 
   function applicationCard(profile) {
+    const routeDetails = new Map(currentCatalog().places.flatMap((place) => place.routes.map((route) => [route.id, { ...route, placeName: place.name }])));
     const routes = (profile.route_ids || []).map((id) => ({
       id,
-      name: id.startsWith("manual:") ? manualRouteLabel(id) : routeNames.get(id) || id,
-      manual: id.startsWith("manual:")
+      name: routeDetails.has(id) ? `${routeDetails.get(id).placeName} — ${routeDetails.get(id).name}` : id.startsWith("manual:") ? manualRouteLabel(id) : id,
+      manual: id.startsWith("manual:"),
+      detail: routeDetails.get(id) || null
     }));
     const approved = profile.status === "approved";
     const banned = profile.status === "banned";
@@ -319,6 +319,7 @@ function paintApplications(panel, client) {
     });
     const feedback = el("p", { class: "hint", hidden: true });
     const routeEditor = el("div", { class: "admin-driver-route-editor", hidden: true });
+    const sharedRouteEditor = el("div", { class: "admin-driver-route-editor shared-route-editor", hidden: true });
     async function review(status) {
       if (status === "rejected" && !message.value.trim()) { feedback.textContent = "Type a clear rejection reason first."; feedback.hidden = false; return; }
       feedback.textContent = "Saving…";
@@ -354,6 +355,44 @@ function paintApplications(panel, client) {
       const { error } = await client.rpc("admin_remove_driver_route", { p_driver_id: profile.user_id, p_route_id: route.id });
       feedback.textContent = error ? "The route could not be removed." : "Route removed from the driver.";
       if (!error) window.setTimeout(load, 350);
+    }
+    function editSharedRoute(route) {
+      if (!route.detail) return;
+      clear(sharedRouteEditor);
+      sharedRouteEditor.hidden = false;
+      const name = el("input", { required: "true", minlength: "2", maxlength: "120", value: route.detail.name, "aria-label": "Shared route name" });
+      const editorFeedback = el("p", { class: "hint", hidden: true, role: "status" });
+      const save = el("button", { type: "submit", class: "find compact", text: "Save route name" });
+      const form = el("form", { class: "stack" }, [
+        el("div", { class: "form-section-head" }, [el("strong", { text: "Edit shared route" }), el("span", { text: route.detail.transport_type })]),
+        el("p", { class: "shared-route-warning", text: "This is a shared route. Changing its name updates it for every assigned driver and passenger." }),
+        el("label", { class: "field-label" }, [el("span", { text: "Route name" }), name]),
+        editorFeedback,
+        el("div", { class: "row-actions" }, [
+          save,
+          el("button", { type: "button", class: "ghost", onclick: () => { sharedRouteEditor.hidden = true; } }, ["Cancel"])
+        ])
+      ]);
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        save.disabled = true;
+        save.textContent = "Saving…";
+        editorFeedback.hidden = false;
+        editorFeedback.textContent = "Updating the shared route…";
+        try {
+          await persistSimpleRoute(route.detail, name.value, route.detail.transport_type, currentCatalog());
+          await refreshCatalog();
+          editorFeedback.textContent = "Shared route updated.";
+          window.setTimeout(load, 300);
+        } catch {
+          save.disabled = false;
+          save.textContent = "Save route name";
+          editorFeedback.textContent = "The shared route could not be updated.";
+        }
+      });
+      sharedRouteEditor.append(form);
+      name.focus();
     }
     function openRouteEditor() {
       clear(routeEditor);
@@ -440,12 +479,14 @@ function paintApplications(panel, client) {
         ]),
         el("div", { class: "application-route-chips" }, routes.length
           ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "" }, [
-              el("span", { text: route.manual ? `${route.name} · manual` : route.name }),
+              el("span", { text: route.manual && !route.detail ? `${route.name} · manual` : route.name }),
+              route.detail ? el("button", { type: "button", class: "route-chip-edit", "aria-label": `Edit shared route ${route.name}`, onclick: () => editSharedRoute(route) }, ["Edit"]) : null,
               el("button", { type: "button", class: "route-chip-delete", "aria-label": `Remove ${route.name} from ${profile.full_name}`, onclick: () => removeDriverRoute(route) }, ["×"])
             ]))
           : [el("span", { text: "No routes supplied" })])
       ]),
       routeEditor,
+      sharedRouteEditor,
       approved && profile.warning_message ? el("div", { class: "moderation-note" }, [
         el("strong", { text: "Current warning" }), el("p", { text: profile.warning_message })
       ]) : null,

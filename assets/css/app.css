@@ -584,7 +584,11 @@ html[data-mode="gate"] #app { display: none; }
 .application-head span { display: block; color: var(--muted); font-size: 13px; }
 .application-phone { font-weight: 750; }
 .application-routes { display: grid; gap: 7px; padding: 11px; border-radius: 13px; background: #f6f9fc; }
-.application-routes > strong { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.application-routes > strong, .application-routes-head > strong { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.application-routes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.edit-driver-routes { min-height: 32px; padding: 5px 10px; border-color: #a9c8eb; color: #155ba4; background: #eaf4ff; font-size: 11px; font-weight: 850; }
+.admin-driver-route-editor { padding: 13px; border: 1px solid #b9d6f4; border-radius: 15px; background: #f7fbff; }
+.admin-driver-route-editor .route-checkbox-list { max-height: 230px; }
 .application-route-chips, .driver-route-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .application-route-chips > span, .driver-route-chips > span { padding: 6px 8px; border-radius: 9px; background: #e7f1ff; color: #174f94; font-size: 11px; font-weight: 750; }
 .application-route-chips > span { display: inline-flex; align-items: center; gap: 6px; }

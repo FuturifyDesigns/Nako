@@ -671,6 +671,41 @@ begin
 end;
 $$;
 
+create or replace function public.admin_update_driver_routes(p_driver_id uuid, p_route_ids text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  clean_routes text[];
+begin
+  if not public.is_admin() then raise exception 'not allowed'; end if;
+
+  select coalesce(array_agg(distinct trim(route_id)), '{}')
+  into clean_routes
+  from unnest(coalesce(p_route_ids, '{}')) as submitted(route_id)
+  where char_length(trim(route_id)) between 2 and 140;
+
+  if coalesce(array_length(clean_routes, 1), 0) > 20 then
+    raise exception 'too many routes';
+  end if;
+
+  update public.driver_profiles
+  set route_ids = clean_routes, reviewed_by = auth.uid()
+  where user_id = p_driver_id
+  returning route_ids into clean_routes;
+
+  if not found then raise exception 'driver not found'; end if;
+
+  update public.driver_locations
+  set route_ids = clean_routes, updated_at = now()
+  where driver_id = p_driver_id;
+
+  return jsonb_build_object('ok', true, 'route_ids', clean_routes);
+end;
+$$;
+
 create or replace function public.admin_delete_route(p_route_id text)
 returns void
 language plpgsql
@@ -721,6 +756,8 @@ revoke all on function public.moderate_driver(uuid, text, text) from public;
 grant execute on function public.moderate_driver(uuid, text, text) to authenticated;
 revoke all on function public.admin_remove_driver_route(uuid, text) from public;
 grant execute on function public.admin_remove_driver_route(uuid, text) to authenticated;
+revoke all on function public.admin_update_driver_routes(uuid, text[]) from public;
+grant execute on function public.admin_update_driver_routes(uuid, text[]) to authenticated;
 revoke all on function public.admin_delete_route(text) from public;
 grant execute on function public.admin_delete_route(text) to authenticated;
 

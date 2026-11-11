@@ -252,6 +252,21 @@ function manualRouteLabel(id) {
   return id.replace(/^manual:(?:(?:taxi|kombi|bus):)?/i, "");
 }
 
+function normalizeRouteName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function splitRouteNames(value) {
+  return [...new Map(String(value || "").split(/[\n,;]+/)
+    .map((name) => name.trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .map((name) => [normalizeRouteName(name), name])).values()].slice(0, 12);
+}
+
 function paintApplications(panel, client) {
   clear(panel);
   let activeType = "taxi";
@@ -303,6 +318,7 @@ function paintApplications(panel, client) {
       "aria-label": approved ? "Driver moderation message" : "Rejection reason"
     });
     const feedback = el("p", { class: "hint", hidden: true });
+    const routeEditor = el("div", { class: "admin-driver-route-editor", hidden: true });
     async function review(status) {
       if (status === "rejected" && !message.value.trim()) { feedback.textContent = "Type a clear rejection reason first."; feedback.hidden = false; return; }
       feedback.textContent = "Saving…";
@@ -339,6 +355,63 @@ function paintApplications(panel, client) {
       feedback.textContent = error ? "The route could not be removed." : "Route removed from the driver.";
       if (!error) window.setTimeout(load, 350);
     }
+    function openRouteEditor() {
+      clear(routeEditor);
+      routeEditor.hidden = false;
+      const catalogNow = currentCatalog();
+      const options = catalogNow.places
+        .flatMap((place) => place.routes.map((route) => ({ ...route, placeName: place.name })))
+        .filter((route) => route.transport_type === profile.transport_type);
+      const selected = new Set(profile.route_ids || []);
+      const choices = el("div", { class: "route-checkbox-list" });
+      for (const route of options) {
+        choices.append(el("label", { class: "route-checkbox" }, [
+          el("input", { type: "checkbox", value: route.id, checked: selected.has(route.id) }),
+          el("span", {}, [el("strong", { text: route.name }), el("small", { text: route.placeName })])
+        ]));
+      }
+      if (!options.length) choices.append(el("p", { class: "hint", text: `No shared ${profile.transport_type} routes exist yet.` }));
+      const manual = el("textarea", { rows: "3", maxlength: "900", placeholder: "One new route per line", "aria-label": "New route names" });
+      const editorFeedback = el("p", { class: "hint", hidden: true, role: "status" });
+      const save = el("button", { type: "submit", class: "find compact", text: "Save driver routes" });
+      const form = el("form", { class: "stack" }, [
+        el("div", { class: "form-section-head" }, [el("strong", { text: "Edit driver routes" }), el("span", { text: profile.transport_type })]),
+        el("p", { class: "hint", text: "Tick shared routes, untick routes to remove them, or enter a new route name below." }),
+        choices,
+        el("label", { class: "field-label" }, [el("span", { text: "Add new routes — one per line" }), manual]),
+        editorFeedback,
+        el("div", { class: "row-actions" }, [
+          save,
+          el("button", { type: "button", class: "ghost", onclick: () => { routeEditor.hidden = true; } }, ["Cancel"])
+        ])
+      ]);
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const routeIds = new Set([...choices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value));
+        const existingByName = new Map(options.map((route) => [normalizeRouteName(route.name), route.id]));
+        for (const name of splitRouteNames(manual.value)) {
+          routeIds.add(existingByName.get(normalizeRouteName(name)) || `manual:${profile.transport_type}:${name}`);
+        }
+        save.disabled = true;
+        save.textContent = "Saving…";
+        editorFeedback.hidden = false;
+        editorFeedback.textContent = "Updating the driver profile…";
+        const { data, error } = await client.rpc("admin_update_driver_routes", {
+          p_driver_id: profile.user_id,
+          p_route_ids: [...routeIds]
+        });
+        save.disabled = false;
+        save.textContent = "Save driver routes";
+        if (error) {
+          editorFeedback.textContent = "The routes could not be updated. Please try again.";
+          return;
+        }
+        profile.route_ids = data?.route_ids || [...routeIds];
+        editorFeedback.textContent = "Driver routes updated.";
+        window.setTimeout(load, 300);
+      });
+      routeEditor.append(form);
+    }
     const actions = approved
       ? [
           el("button", { type: "button", class: "ghost moderation-warn", onclick: () => moderate("warn") }, ["Warn driver"]),
@@ -361,7 +434,10 @@ function paintApplications(panel, client) {
       ]),
       el("p", { class: "application-phone", text: profile.phone }),
       el("div", { class: "application-routes" }, [
-        el("strong", { text: `Routes (${routes.length})` }),
+        el("div", { class: "application-routes-head" }, [
+          el("strong", { text: `Routes (${routes.length})` }),
+          el("button", { type: "button", class: "ghost edit-driver-routes", onclick: openRouteEditor }, ["Edit routes"])
+        ]),
         el("div", { class: "application-route-chips" }, routes.length
           ? routes.map((route) => el("span", { class: route.manual ? "is-manual" : "" }, [
               el("span", { text: route.manual ? `${route.name} · manual` : route.name }),
@@ -369,6 +445,7 @@ function paintApplications(panel, client) {
             ]))
           : [el("span", { text: "No routes supplied" })])
       ]),
+      routeEditor,
       approved && profile.warning_message ? el("div", { class: "moderation-note" }, [
         el("strong", { text: "Current warning" }), el("p", { text: profile.warning_message })
       ]) : null,

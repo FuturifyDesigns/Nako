@@ -222,7 +222,26 @@ function renderAuth() {
           options: { data: { phone } }
         }
       : { email: loginEmail, password: password.value };
-    const result = registering ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
+    let result = registering ? await db.auth.signUp(credentials) : await db.auth.signInWithPassword(credentials);
+    const duplicateAccount = registering && (
+      /already|registered|exists/i.test(result.error?.message || "") ||
+      (!result.error && !result.data?.session && result.data?.user && !result.data.user.identities?.length)
+    );
+    if (duplicateAccount) {
+      const existingLogin = await db.auth.signInWithPassword({ email: loginEmail, password: password.value });
+      if (!existingLogin.error && existingLogin.data.session) {
+        result = existingLogin;
+        notify("Your existing login was found. Continue with your driver registration.");
+      } else {
+        button.disabled = false;
+        mode.value = "login";
+        updateMode();
+        message.textContent = "This phone number already has a login. Sign in with its password to continue the driver application.";
+        message.hidden = false;
+        password.focus();
+        return;
+      }
+    }
     button.disabled = false;
     updateMode();
     if (result.error) {

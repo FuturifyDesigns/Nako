@@ -1,4 +1,4 @@
-import { promptInstall, registerServiceWorker } from "./install.js";
+import { promptInstall, registerServiceWorker, showInstallInstructions } from "./install.js";
 import { applyLandingI18n, initLang, t, toggleLang } from "./i18n.js";
 import { mountPassenger } from "./passenger.js";
 import { isHandheld, isStandalone } from "./session.js";
@@ -61,7 +61,7 @@ if (installed) {
       await track("install_click");
       const outcome = await promptInstall();
       if (outcome === "accepted") await track("install_accepted");
-      if (help) help.hidden = false;
+      if (outcome === "unavailable") showInstallInstructions({ appHref: "./" });
     });
   }
 }

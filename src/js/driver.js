@@ -19,6 +19,8 @@ let profileChannel = null;
 const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
+const DRAFT_KEY_PREFIX = "nakolive-driver-draft-v1:";
+let authWatcher = null;
 
 function manualRouteName(id) {
   if (!id?.startsWith("manual:")) return "";
@@ -104,6 +106,31 @@ async function profileFor(userId) {
   return data;
 }
 
+function localDraftKey(userId) {
+  return `${DRAFT_KEY_PREFIX}${userId}`;
+}
+
+async function registrationDraftFor(userId) {
+  let local = null;
+  try { local = JSON.parse(localStorage.getItem(localDraftKey(userId)) || "null"); } catch { /* Ignore a damaged local draft. */ }
+  if (!navigator.onLine) return local;
+  const { data, error } = await db.from("driver_registration_drafts").select("draft").eq("user_id", userId).maybeSingle();
+  if (error) return local;
+  const remote = data?.draft || null;
+  return Number(local?.savedAt || 0) > Number(remote?.savedAt || 0) ? local : remote || local;
+}
+
+async function saveRegistrationDraft(userId, draft) {
+  localStorage.setItem(localDraftKey(userId), JSON.stringify(draft));
+  if (!navigator.onLine) return;
+  await db.from("driver_registration_drafts").upsert({ user_id: userId, draft, updated_at: new Date().toISOString() });
+}
+
+async function clearRegistrationDraft(userId) {
+  localStorage.removeItem(localDraftKey(userId));
+  if (navigator.onLine) await db.from("driver_registration_drafts").delete().eq("user_id", userId);
+}
+
 async function boot() {
   if (!isHandheld()) {
     root.append(el("section", { class: "card admin-card driver-card driver-desktop-note" }, [
@@ -120,7 +147,19 @@ async function boot() {
     return;
   }
   await startSync();
-  const { data } = await db.auth.getSession();
+  let { data } = await db.auth.getSession();
+  if (!data.session && navigator.onLine) {
+    const refreshed = await db.auth.refreshSession();
+    if (refreshed.data?.session) data = refreshed.data;
+  }
+  authWatcher?.unsubscribe();
+  const watcher = db.auth.onAuthStateChange((event, session) => {
+    if (session && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && root.querySelector(".auth-form")) {
+      localStorage.setItem(ROLE_CHOICE_KEY, "driver");
+      renderDriver(session.user);
+    }
+  });
+  authWatcher = watcher.data.subscription;
   if (!data.session) renderAuth();
   else {
     localStorage.setItem(ROLE_CHOICE_KEY, "driver");
@@ -136,7 +175,7 @@ function renderAuth() {
     el("option", { value: "register", text: "Create driver account" })
   ]);
   mode.value = new URLSearchParams(location.search).get("mode") === "register" ? "register" : "login";
-  const identifier = el("input", { type: "text", required: "true", autocomplete: "tel", inputmode: "tel", placeholder: "+267 71 234 567", maxlength: "160" });
+  const identifier = el("input", { type: "tel", required: "true", autocomplete: "tel", inputmode: "tel", placeholder: "+267 71 234 567", maxlength: "30", value: "+267" });
   const identifierLabel = el("span", { text: "Phone number" });
   const password = el("input", { type: "password", required: "true", minlength: "8", autocomplete: "current-password", placeholder: "Enter your password" });
   const passwordToggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
@@ -183,10 +222,10 @@ function renderAuth() {
   function updateMode() {
     const registering = mode.value === "register";
     button.textContent = registering ? "Create driver account" : "Sign in securely";
-    identifierLabel.textContent = registering ? "Phone number" : "Phone number or existing email";
-    identifier.placeholder = registering ? "+267 71 234 567" : "+267 71 234 567 or driver@example.com";
-    identifier.inputMode = registering ? "tel" : "text";
-    identifier.autocomplete = registering ? "tel" : "username";
+    identifierLabel.textContent = "Phone number";
+    identifier.placeholder = "+267 71 234 567";
+    identifier.inputMode = "tel";
+    identifier.autocomplete = "tel";
     password.autocomplete = registering ? "new-password" : "current-password";
     password.minLength = registering ? 10 : 8;
     password.placeholder = registering ? "Create a strong password" : "Enter your password";
@@ -206,7 +245,7 @@ function renderAuth() {
     const registering = mode.value === "register";
     const phone = normalizePhone(identifier.value);
     const loginEmail = accountEmail(identifier.value);
-    identifier.setCustomValidity(!loginEmail || (registering && !phone) ? "Enter a valid phone number." : "");
+    identifier.setCustomValidity(!loginEmail || !phone ? "Enter a valid Botswana phone number." : "");
     if (!form.reportValidity()) {
       message.textContent = "Please correct the highlighted fields before continuing.";
       message.hidden = false;
@@ -270,8 +309,19 @@ async function renderDriver(user) {
   stopSharing(false);
   clearProfileWatcher();
   clear(root);
+  if (navigator.onLine) {
+    const verified = await db.auth.getUser();
+    if (verified.error || !verified.data?.user) {
+      await db.auth.signOut({ scope: "local" });
+      renderAuth();
+      notify("Your login is no longer active. Please sign in again.", "error");
+      return;
+    }
+    user = verified.data.user;
+  }
   const profile = await profileFor(user.id);
-  if (!profile || profile.status === "rejected") renderRegistration(user, profile);
+  if (!profile) renderRegistration(user, null, await registrationDraftFor(user.id));
+  else if (profile.status === "rejected") renderRegistration(user, profile);
   else if (profile.status === "pending") renderPending(user, profile);
   else if (profile.status === "banned") renderBanned(user, profile);
   else renderApproved(user, profile);
@@ -327,11 +377,11 @@ function renderBanned(user, profile) {
   watchProfile(user, () => renderDriver(user));
 }
 
-function renderRegistration(user, existing) {
+function renderRegistration(user, existing, savedDraft = null) {
   const catalog = currentCatalog();
   const field = (label, input) => el("label", { class: "field-label" }, [el("span", { text: label }), input]);
   const fullName = el("input", { required: "true", minlength: "2", maxlength: "100", value: existing?.full_name || "", autocomplete: "name", placeholder: "Your full name" });
-  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || user.user_metadata?.phone || "", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
+  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || user.user_metadata?.phone || "+267", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
   const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: `${value[0].toUpperCase() + value.slice(1)} driver`, selected: existing?.transport_type === value ? "selected" : null })));
   const vehicle = el("input", { required: "true", minlength: "2", maxlength: "120", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
   const plate = el("input", { required: "true", minlength: "2", maxlength: "30", pattern: "[A-Za-z0-9 -]{2,30}", value: existing?.plate || "", autocapitalize: "characters", placeholder: "B 123 ABC" });
@@ -342,6 +392,32 @@ function renderRegistration(user, existing) {
   const manualRoutes = el("textarea", { rows: "4", maxlength: "900", placeholder: "Example:\nMain Mall to Block 8\nStation to Tlokweng Border", "aria-label": "Other routes" });
   manualRoutes.value = existingManual.join("\n");
   const sharedRouteHint = el("p", { class: "route-existing-hint", hidden: true, role: "status" });
+  let draftTimer = 0;
+
+  function collectDraft() {
+    return {
+      fullName: fullName.value,
+      phone: phone.value,
+      type: type.value,
+      vehicle: vehicle.value,
+      plate: plate.value,
+      routeIds: [...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value),
+      manualRoutes: manualRoutes.value,
+      savedAt: Date.now()
+    };
+  }
+
+  function hasUsefulDraft(draft) {
+    return Boolean(draft && (draft.fullName || draft.vehicle || draft.plate || draft.manualRoutes || draft.routeIds?.length || (draft.phone && draft.phone !== "+267")));
+  }
+
+  function scheduleDraftSave() {
+    if (existing) return;
+    const draft = collectDraft();
+    localStorage.setItem(localDraftKey(user.id), JSON.stringify(draft));
+    window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(() => saveRegistrationDraft(user.id, draft), 600);
+  }
 
   function updateRouteCount() {
     const count = routeChoices.querySelectorAll('input[type="checkbox"]:checked').length;
@@ -356,7 +432,7 @@ function renderRegistration(user, existing) {
     const options = routesForType(catalog, type.value);
     for (const route of options) {
       const checkbox = el("input", { type: "checkbox", value: route.id, checked: selected.has(route.id) });
-      checkbox.addEventListener("change", updateRouteCount);
+      checkbox.addEventListener("change", () => { updateRouteCount(); scheduleDraftSave(); });
       routeChoices.append(el("label", { class: "route-checkbox" }, [
         checkbox,
         el("span", {}, [el("strong", { text: route.name }), el("small", { text: route.placeName })])
@@ -408,6 +484,8 @@ function renderRegistration(user, existing) {
     input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
     input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
     input.addEventListener("change", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
+    input.addEventListener("input", scheduleDraftSave);
+    input.addEventListener("change", scheduleDraftSave);
   }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -434,6 +512,7 @@ function renderRegistration(user, existing) {
     submit.disabled = false;
     submit.textContent = existing ? "Send corrected application" : "Send for verification";
     if (error) { message.textContent = error.message; message.hidden = false; return; }
+    await clearRegistrationDraft(user.id);
     notify("Application sent for verification.");
     renderDriver(user);
   });
@@ -441,6 +520,36 @@ function renderRegistration(user, existing) {
   if (existing?.rejection_message) intro.push(el("div", { class: "status-panel rejected" }, [el("strong", { text: "Changes required" }), el("p", { text: existing.rejection_message })]));
   intro.push(el("p", { class: "lede", text: "Enter your contact, vehicle and route information for the administrator to verify." }), form);
   shell(existing ? "Correct your application" : "Driver registration", intro, user);
+
+  function applyDraft(draft) {
+    fullName.value = draft.fullName || "";
+    phone.value = draft.phone || "+267";
+    type.value = ["taxi", "kombi", "bus"].includes(draft.type) ? draft.type : "taxi";
+    vehicle.value = draft.vehicle || "";
+    plate.value = draft.plate || "";
+    manualRoutes.value = draft.manualRoutes || "";
+    fillRoutes();
+    const selected = new Set(draft.routeIds || []);
+    for (const checkbox of routeChoices.querySelectorAll('input[type="checkbox"]')) checkbox.checked = selected.has(checkbox.value);
+    linkExistingTypedRoutes();
+    updateRouteCount();
+  }
+
+  if (!existing && hasUsefulDraft(savedDraft)) {
+    const overlay = el("div", { class: "draft-choice-overlay" }, [
+      el("section", { class: "draft-choice-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "draft-choice-title" }, [
+        el("p", { class: "eyebrow", text: "SAVED REGISTRATION" }),
+        el("h2", { id: "draft-choice-title", text: "Continue your driver registration?" }),
+        el("p", { text: "We saved the information you entered previously on this registration." }),
+        el("div", { class: "draft-choice-actions" }, [
+          el("button", { type: "button", class: "find", onclick: () => { applyDraft(savedDraft); overlay.remove(); notify("Your registration draft was restored."); } }, ["Continue draft"]),
+          el("button", { type: "button", class: "ghost", onclick: async () => { await clearRegistrationDraft(user.id); overlay.remove(); notify("A fresh registration is ready."); } }, ["Start fresh"])
+        ])
+      ])
+    ]);
+    document.body.append(overlay);
+    overlay.querySelector("button")?.focus();
+  }
 }
 
 function routeLabels(routeIds = []) {

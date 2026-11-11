@@ -335,7 +335,7 @@ function paintApplications(panel, client) {
         message.focus();
         return;
       }
-      if (action === "delete" && !window.confirm(`Delete ${profile.full_name}'s driver profile? This removes their vehicle and live location record.`)) return;
+      if (action === "delete" && !window.confirm(`Permanently delete ${profile.full_name}'s account? This removes their login, driver profile, saved draft, vehicle and live location from the database.`)) return;
       if (action === "ban" && !window.confirm(`Ban ${profile.full_name}? Their live location will be switched off immediately.`)) return;
       feedback.textContent = action === "delete" ? "Deleting driver…" : "Saving…";
       feedback.hidden = false;
@@ -344,7 +344,7 @@ function paintApplications(panel, client) {
         ? "The moderation action could not be saved."
         : action === "warn" ? "Warning sent to the driver."
           : action === "ban" ? "Driver banned and location sharing stopped."
-            : "Driver profile deleted.";
+            : "Driver account and database records deleted.";
       if (!error) window.setTimeout(load, 450);
     }
     async function removeDriverRoute(route) {

@@ -378,6 +378,12 @@ end $$;
 create unique index if not exists driver_profiles_plate_idx on public.driver_profiles (upper(plate));
 create index if not exists driver_profiles_queue_idx on public.driver_profiles (transport_type, status, created_at desc);
 
+create table if not exists public.driver_registration_drafts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  draft jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.driver_locations (
   driver_id uuid primary key references public.driver_profiles(user_id) on delete cascade,
   transport_type text not null check (transport_type in ('taxi', 'kombi', 'bus')),
@@ -639,7 +645,7 @@ begin
     where user_id = p_driver_id;
     update public.driver_locations set sharing = false, updated_at = now() where driver_id = p_driver_id;
   else
-    delete from public.driver_profiles where user_id = p_driver_id;
+    delete from auth.users where id = p_driver_id;
   end if;
 end;
 $$;
@@ -726,6 +732,7 @@ $$;
 
 alter table public.driver_profiles enable row level security;
 alter table public.driver_locations enable row level security;
+alter table public.driver_registration_drafts enable row level security;
 
 drop policy if exists driver_profiles_own_select on public.driver_profiles;
 create policy driver_profiles_own_select on public.driver_profiles for select to authenticated
@@ -742,8 +749,15 @@ drop policy if exists driver_locations_public_select on public.driver_locations;
 create policy driver_locations_public_select on public.driver_locations for select to anon, authenticated
 using (sharing and updated_at > now() - interval '5 minutes');
 
+drop policy if exists driver_registration_drafts_own on public.driver_registration_drafts;
+create policy driver_registration_drafts_own on public.driver_registration_drafts
+for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
 grant select, insert, update on public.driver_profiles to authenticated;
 grant select on public.driver_locations to anon, authenticated;
+grant select, insert, update, delete on public.driver_registration_drafts to authenticated;
 revoke all on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) from public;
 grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) to authenticated;
 revoke all on function public.stop_driver_location() from public;

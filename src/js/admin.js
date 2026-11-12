@@ -4,7 +4,9 @@ import { adminSummary, currentCatalog, onSync, refreshCatalog, saveRoute, setRou
 const routePaintVersion = new WeakMap();
 
 export async function mountAdmin(root) {
-  const client = supabaseClient();
+  // Staff and drivers can use the same browser without replacing each
+  // other's Supabase sessions.
+  const client = supabaseClient("admin");
   await startSync();
   if (!client) {
     root.append(el("section", { class: "card admin-card" }, [

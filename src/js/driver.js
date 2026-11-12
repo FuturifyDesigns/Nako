@@ -177,6 +177,12 @@ async function boot() {
     const refreshed = await db.auth.refreshSession();
     if (refreshed.data?.session) data = refreshed.data;
   }
+  // Older builds stored staff and driver authentication in the same slot.
+  // Never mistake a restored administrator session for a new driver.
+  if (data.session?.user?.app_metadata?.role === "admin") {
+    await db.auth.signOut({ scope: "local" });
+    data = { session: null };
+  }
   authWatcher?.unsubscribe();
   const watcher = db.auth.onAuthStateChange((event, session) => {
     const awaitingDriverSession = !root.children.length || root.querySelector(".auth-form, .combined-login-link");

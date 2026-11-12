@@ -49,21 +49,23 @@ function setStatus(next) {
   emit();
 }
 
-function getClient() {
+function getClient(scope = "app") {
   if (client || !config.supabaseUrl || !config.supabaseAnonKey || !globalThis.supabase?.createClient) return client;
+  const storageKey = scope === "admin" ? "nakolive-admin-auth-v1" : undefined;
   client = globalThis.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      ...(storageKey ? { storageKey } : {})
     },
     realtime: { params: { eventsPerSecond: 10 } }
   });
   return client;
 }
 
-export function supabaseClient() {
-  return getClient();
+export function supabaseClient(scope = "app") {
+  return getClient(scope);
 }
 
 function nest(local, rows) {

@@ -104,6 +104,18 @@ function notify(message, kind = "ok") {
   window.setTimeout(() => toast.remove(), 4200);
 }
 
+async function withTimeout(promise, milliseconds, message) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => { timer = window.setTimeout(() => reject(new Error(message)), milliseconds); })
+    ]);
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function profileFor(userId) {
   const cacheKey = `${PROFILE_CACHE_PREFIX}${userId}`;
   const { data, error } = await db.from("driver_profiles").select("*").eq("user_id", userId).maybeSingle();
@@ -586,49 +598,69 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
       return;
     }
     submit.disabled = true;
-    submit.textContent = accountSetup ? "Creating account and sending…" : "Sending application…";
+    submit.textContent = accountSetup ? "Creating secure login…" : "Saving driver profile…";
     message.hidden = true;
     let activeUser = user;
-    if (accountSetup) {
-      const loginEmail = accountEmail(normalizedPhone);
-      let authResult = await db.auth.signUp({
-        email: loginEmail,
-        password: accountPassword.value,
-        options: { data: { phone: normalizedPhone } }
-      });
-      const duplicateAccount = /already|registered|exists/i.test(authResult.error?.message || "") ||
-        (!authResult.error && !authResult.data?.session && authResult.data?.user && !authResult.data.user.identities?.length);
-      if (duplicateAccount) authResult = await db.auth.signInWithPassword({ email: loginEmail, password: accountPassword.value });
-      if (authResult.error || !authResult.data?.user || !authResult.data?.session) {
-        submit.disabled = false;
-        submit.textContent = "Create account and send application";
-        message.textContent = duplicateAccount
-          ? "This phone number already has a login with a different password. Use Driver login to continue the saved registration."
-          : authResult.error?.message || "The driver account could not be created.";
-        message.hidden = false;
-        return;
+    try {
+      if (accountSetup) {
+        const loginEmail = accountEmail(normalizedPhone);
+        let authResult = await withTimeout(db.auth.signUp({
+          email: loginEmail,
+          password: accountPassword.value,
+          options: { data: { phone: normalizedPhone } }
+        }), 15000, "Account creation took too long. Check your connection and press the button again.");
+        const duplicateAccount = /already|registered|exists/i.test(authResult.error?.message || "") ||
+          (!authResult.error && !authResult.data?.session && authResult.data?.user && !authResult.data.user.identities?.length);
+        if (duplicateAccount) {
+          submit.textContent = "Continuing existing account…";
+          authResult = await withTimeout(
+            db.auth.signInWithPassword({ email: loginEmail, password: accountPassword.value }),
+            15000,
+            "Sign-in took too long. Check your connection and try again."
+          );
+        }
+        if (authResult.error || !authResult.data?.user || !authResult.data?.session) {
+          submit.disabled = false;
+          submit.textContent = "Create account and send application";
+          message.textContent = duplicateAccount
+            ? "This phone number already has a login with a different password. Use Driver login to continue the saved registration."
+            : authResult.error?.message || "The driver account could not be created.";
+          message.hidden = false;
+          return;
+        }
+        activeUser = authResult.data.user;
+        localStorage.setItem(ROLE_CHOICE_KEY, "driver");
       }
-      activeUser = authResult.data.user;
-      localStorage.setItem(ROLE_CHOICE_KEY, "driver");
+      submit.textContent = "Saving driver profile…";
+      const { data: savedProfile, error } = await withTimeout(db.rpc("submit_driver_profile", {
+        p_full_name: fullName.value.trim(),
+        p_phone: normalizedPhone || phone.value.trim(),
+        p_transport_type: type.value,
+        p_vehicle_description: vehicle.value.trim(),
+        p_plate: plate.value.trim().toUpperCase(),
+        p_route_ids: resolvedRoutes.ids
+      }), 20000, "Saving the driver profile took too long. Your login may already exist; press the button again to continue.");
+      submit.disabled = false;
+      submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
+      if (error) { message.textContent = error.message; message.hidden = false; return; }
+      const row = savedProfile || {
+        user_id: activeUser.id, full_name: fullName.value.trim(), phone: normalizedPhone || phone.value.trim(), transport_type: type.value,
+        vehicle_description: vehicle.value.trim(), plate: plate.value.trim().toUpperCase(), route_ids: resolvedRoutes.ids, status: "pending"
+      };
+      localStorage.setItem(`${PROFILE_CACHE_PREFIX}${activeUser.id}`, JSON.stringify(row));
+      localStorage.removeItem(localDraftKey(draftOwner));
+      await clearRegistrationDraft(activeUser.id);
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.set("mode", "login");
+      history.replaceState({}, "", cleanUrl);
+      notify("Application sent for verification.");
+      renderPending(activeUser, row);
+    } catch (error) {
+      submit.disabled = false;
+      submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
+      message.textContent = error.message || "The registration could not be completed. Please try again.";
+      message.hidden = false;
     }
-    const row = {
-      user_id: activeUser.id, full_name: fullName.value.trim(), phone: normalizedPhone || phone.value.trim(), transport_type: type.value,
-      vehicle_description: vehicle.value.trim(),
-      plate: plate.value.trim().toUpperCase(), route_ids: resolvedRoutes.ids,
-      status: "pending", rejection_message: null, reviewed_at: null, reviewed_by: null
-    };
-    const { error } = await db.from("driver_profiles").upsert(row);
-    submit.disabled = false;
-    submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
-    if (error) { message.textContent = error.message; message.hidden = false; return; }
-    localStorage.setItem(`${PROFILE_CACHE_PREFIX}${activeUser.id}`, JSON.stringify(row));
-    localStorage.removeItem(localDraftKey(draftOwner));
-    await clearRegistrationDraft(activeUser.id);
-    const cleanUrl = new URL(location.href);
-    cleanUrl.searchParams.set("mode", "login");
-    history.replaceState({}, "", cleanUrl);
-    notify("Application sent for verification.");
-    renderPending(activeUser, row);
   });
   const intro = [];
   if (existing?.rejection_message) intro.push(el("div", { class: "status-panel rejected" }, [el("strong", { text: "Changes required" }), el("p", { text: existing.rejection_message })]));

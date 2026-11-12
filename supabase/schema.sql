@@ -629,6 +629,60 @@ begin
 end;
 $$;
 
+create or replace function public.submit_driver_profile(
+  p_full_name text,
+  p_phone text,
+  p_transport_type text,
+  p_vehicle_description text,
+  p_plate text,
+  p_route_ids text[]
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  clean_routes text[];
+  saved public.driver_profiles%rowtype;
+begin
+  if auth.uid() is null then raise exception 'sign in required'; end if;
+  if p_transport_type not in ('taxi', 'kombi', 'bus') then raise exception 'invalid transport type'; end if;
+
+  select coalesce(array_agg(distinct trim(route_id)), '{}')
+  into clean_routes
+  from unnest(coalesce(p_route_ids, '{}')) submitted(route_id)
+  where char_length(trim(route_id)) between 2 and 140;
+
+  if coalesce(array_length(clean_routes, 1), 0) < 1 then raise exception 'at least one route is required'; end if;
+  if array_length(clean_routes, 1) > 20 then raise exception 'too many routes'; end if;
+
+  insert into public.driver_profiles (
+    user_id, full_name, phone, transport_type, vehicle_description, plate,
+    route_ids, status, rejection_message, reviewed_at, reviewed_by
+  ) values (
+    auth.uid(), trim(p_full_name), trim(p_phone), p_transport_type,
+    trim(p_vehicle_description), upper(trim(p_plate)), clean_routes,
+    'pending', null, null, null
+  )
+  on conflict (user_id) do update set
+    full_name = excluded.full_name,
+    phone = excluded.phone,
+    transport_type = excluded.transport_type,
+    vehicle_description = excluded.vehicle_description,
+    plate = excluded.plate,
+    route_ids = excluded.route_ids,
+    status = 'pending',
+    rejection_message = null,
+    reviewed_at = null,
+    reviewed_by = null
+  where driver_profiles.status in ('pending', 'rejected')
+  returning * into saved;
+
+  if saved.user_id is null then raise exception 'approved or banned profile cannot be replaced'; end if;
+  return to_jsonb(saved);
+end;
+$$;
+
 create or replace function public.review_driver(p_driver_id uuid, p_status text, p_message text default null)
 returns void language plpgsql security definer set search_path = public
 as $$
@@ -785,6 +839,8 @@ revoke all on function public.stop_driver_location() from public;
 grant execute on function public.stop_driver_location() to authenticated;
 revoke all on function public.update_driver_routes(text[]) from public;
 grant execute on function public.update_driver_routes(text[]) to authenticated;
+revoke all on function public.submit_driver_profile(text, text, text, text, text, text[]) from public;
+grant execute on function public.submit_driver_profile(text, text, text, text, text, text[]) to authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;

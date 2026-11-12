@@ -25,6 +25,7 @@ const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
 const DRAFT_KEY_PREFIX = "nakolive-driver-draft-v1:";
 const PROFILE_CACHE_PREFIX = "nakolive-driver-profile-v1:";
 let authWatcher = null;
+let driverSession = null;
 
 function manualRouteName(id) {
   if (!id?.startsWith("manual:")) return "";
@@ -117,6 +118,32 @@ async function withTimeout(promise, milliseconds, message) {
   }
 }
 
+async function submitDriverProfile(session, payload) {
+  if (!session?.access_token) throw new Error("Your driver login expired. Sign in again and resubmit the application.");
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/submit_driver_profile`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        apikey: config.supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) return { data: null, error: { message: body?.message || "The driver profile could not be saved." } };
+    return { data: body, error: null };
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Saving took too long. Check your connection and press the button again.");
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function profileFor(userId) {
   const cacheKey = `${PROFILE_CACHE_PREFIX}${userId}`;
   const { data, error } = await db.from("driver_profiles").select("*").eq("user_id", userId).maybeSingle();
@@ -183,8 +210,11 @@ async function boot() {
     await db.auth.signOut({ scope: "local" });
     data = { session: null };
   }
+  driverSession = data.session || null;
   authWatcher?.unsubscribe();
   const watcher = db.auth.onAuthStateChange((event, session) => {
+    if (session) driverSession = session;
+    if (event === "SIGNED_OUT") driverSession = null;
     const awaitingDriverSession = !root.children.length || root.querySelector(".auth-form, .combined-login-link");
     if (session && !profileSubmissionInProgress && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && awaitingDriverSession) {
       localStorage.setItem(ROLE_CHOICE_KEY, "driver");
@@ -340,6 +370,7 @@ function renderAuth() {
       updateMode();
       return;
     }
+    driverSession = result.data.session;
     localStorage.setItem(ROLE_CHOICE_KEY, "driver");
     renderDriver(result.data.user);
   });
@@ -638,17 +669,18 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
           return;
         }
         activeUser = authResult.data.user;
+        driverSession = authResult.data.session;
         localStorage.setItem(ROLE_CHOICE_KEY, "driver");
       }
       submit.textContent = "Saving driver profile…";
-      const { data: savedProfile, error } = await withTimeout(db.rpc("submit_driver_profile", {
+      const { data: savedProfile, error } = await submitDriverProfile(driverSession, {
         p_full_name: fullName.value.trim(),
         p_phone: normalizedPhone || phone.value.trim(),
         p_transport_type: type.value,
         p_vehicle_description: vehicle.value.trim(),
         p_plate: plate.value.trim().toUpperCase(),
         p_route_ids: resolvedRoutes.ids
-      }), 20000, "Saving the driver profile took too long. Your login may already exist; press the button again to continue.");
+      });
       submit.disabled = false;
       submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
       if (error) { message.textContent = error.message; message.hidden = false; return; }
@@ -658,7 +690,7 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
       };
       localStorage.setItem(`${PROFILE_CACHE_PREFIX}${activeUser.id}`, JSON.stringify(row));
       localStorage.removeItem(localDraftKey(draftOwner));
-      await clearRegistrationDraft(activeUser.id);
+      clearRegistrationDraft(activeUser.id).catch(() => {});
       const cleanUrl = new URL(location.href);
       cleanUrl.searchParams.set("mode", "login");
       history.replaceState({}, "", cleanUrl);

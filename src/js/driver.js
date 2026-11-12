@@ -18,6 +18,7 @@ let lastStrongMovementAt = 0;
 let profileChannel = null;
 let profilePoll = null;
 let activeSharingUi = null;
+let profileSubmissionInProgress = false;
 const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
@@ -179,7 +180,7 @@ async function boot() {
   authWatcher?.unsubscribe();
   const watcher = db.auth.onAuthStateChange((event, session) => {
     const awaitingDriverSession = !root.children.length || root.querySelector(".auth-form, .combined-login-link");
-    if (session && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && awaitingDriverSession) {
+    if (session && !profileSubmissionInProgress && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && awaitingDriverSession) {
       localStorage.setItem(ROLE_CHOICE_KEY, "driver");
       renderDriver(session.user);
     }
@@ -601,6 +602,7 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
     submit.disabled = true;
     submit.textContent = accountSetup ? "Creating secure login…" : "Saving driver profile…";
     message.hidden = true;
+    profileSubmissionInProgress = true;
     let activeUser = user;
     try {
       if (accountSetup) {
@@ -661,6 +663,8 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
       submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
       message.textContent = error.message || "The registration could not be completed. Please try again.";
       message.hidden = false;
+    } finally {
+      profileSubmissionInProgress = false;
     }
   });
   const intro = [];

@@ -168,6 +168,12 @@ async function boot() {
 }
 
 function renderAuth() {
+  if (new URLSearchParams(location.search).get("mode") === "register") {
+    let savedDraft = null;
+    try { savedDraft = JSON.parse(localStorage.getItem(localDraftKey("new")) || "null"); } catch { /* Ignore a damaged local draft. */ }
+    renderRegistration(null, null, savedDraft, true);
+    return;
+  }
   clear(root);
   const field = (label, input) => el("label", { class: "field-label auth-field" }, [el("span", { text: label }), input]);
   const mode = el("select", { "aria-label": "Account action" }, [
@@ -221,6 +227,13 @@ function renderAuth() {
 
   function updateMode() {
     const registering = mode.value === "register";
+    if (registering) {
+      const url = new URL(location.href);
+      url.searchParams.set("mode", "register");
+      history.replaceState({}, "", url);
+      renderAuth();
+      return;
+    }
     button.textContent = registering ? "Create driver account" : "Sign in securely";
     identifierLabel.textContent = "Phone number";
     identifier.placeholder = "+267 71 234 567";
@@ -311,13 +324,14 @@ async function renderDriver(user) {
   clear(root);
   if (navigator.onLine) {
     const verified = await db.auth.getUser();
-    if (verified.error || !verified.data?.user) {
+    const invalidLogin = verified.error && (/invalid|expired|not found|no user|jwt/i.test(verified.error.message || "") || verified.error.status === 401 || verified.error.status === 403);
+    if (invalidLogin || (!verified.error && !verified.data?.user)) {
       await db.auth.signOut({ scope: "local" });
       renderAuth();
       notify("Your login is no longer active. Please sign in again.", "error");
       return;
     }
-    user = verified.data.user;
+    if (verified.data?.user) user = verified.data.user;
   }
   const profile = await profileFor(user.id);
   if (!profile) renderRegistration(user, null, await registrationDraftFor(user.id));
@@ -377,11 +391,37 @@ function renderBanned(user, profile) {
   watchProfile(user, () => renderDriver(user));
 }
 
-function renderRegistration(user, existing, savedDraft = null) {
+function renderRegistration(user, existing, savedDraft = null, accountSetup = false) {
   const catalog = currentCatalog();
   const field = (label, input) => el("label", { class: "field-label" }, [el("span", { text: label }), input]);
   const fullName = el("input", { required: "true", minlength: "2", maxlength: "100", value: existing?.full_name || "", autocomplete: "name", placeholder: "Your full name" });
-  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || user.user_metadata?.phone || "+267", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
+  const phone = el("input", { required: "true", minlength: "7", maxlength: "30", pattern: "[+0-9() -]{7,30}", value: existing?.phone || user?.user_metadata?.phone || "+267", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+267 71 234 567" });
+  const accountPassword = el("input", { type: "password", required: accountSetup, minlength: "10", autocomplete: "new-password", placeholder: "Create a strong password" });
+  const accountPasswordToggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
+  const accountPasswordWrap = el("div", { class: "password-input-wrap" }, [accountPassword, accountPasswordToggle]);
+  const accountStrengthLabel = el("span", { class: "strength-label" });
+  const accountStrength = el("div", { class: "password-strength", hidden: true, role: "status" }, [
+    el("div", { class: "strength-row" }, [el("strong", { text: "Password strength" }), accountStrengthLabel]),
+    el("div", { class: "strength-bars", "aria-hidden": "true" }, [0, 1, 2, 3, 4].map(() => el("span"))),
+    el("small", { text: "Use 10+ characters with uppercase, lowercase, a number and a symbol." })
+  ]);
+  accountPasswordToggle.addEventListener("click", () => {
+    const showing = accountPassword.type === "text";
+    accountPassword.type = showing ? "password" : "text";
+    accountPasswordToggle.textContent = showing ? "Show" : "Hide";
+    accountPasswordToggle.setAttribute("aria-pressed", showing ? "false" : "true");
+    accountPassword.focus();
+  });
+  function updateAccountStrength() {
+    if (!accountSetup) return;
+    const value = accountPassword.value;
+    const score = [value.length >= 10, /[a-z]/.test(value) && /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value), value.length >= 14].filter(Boolean).length;
+    accountStrength.hidden = !value;
+    accountStrength.dataset.score = String(score);
+    accountStrengthLabel.textContent = ["Very weak", "Weak", "Fair", "Good", "Strong", "Very strong"][score];
+    accountPassword.setCustomValidity(value && score < 4 ? "Use at least 10 characters with uppercase, lowercase, a number and a symbol." : "");
+  }
+  accountPassword.addEventListener("input", updateAccountStrength);
   const type = el("select", { required: "true" }, ["taxi", "kombi", "bus"].map((value) => el("option", { value, text: `${value[0].toUpperCase() + value.slice(1)} driver`, selected: existing?.transport_type === value ? "selected" : null })));
   const vehicle = el("input", { required: "true", minlength: "2", maxlength: "120", value: existing?.vehicle_description || "", placeholder: "White Toyota Quantum" });
   const plate = el("input", { required: "true", minlength: "2", maxlength: "30", pattern: "[A-Za-z0-9 -]{2,30}", value: existing?.plate || "", autocapitalize: "characters", placeholder: "B 123 ABC" });
@@ -393,6 +433,7 @@ function renderRegistration(user, existing, savedDraft = null) {
   manualRoutes.value = existingManual.join("\n");
   const sharedRouteHint = el("p", { class: "route-existing-hint", hidden: true, role: "status" });
   let draftTimer = 0;
+  const draftOwner = user?.id || "new";
 
   function collectDraft() {
     return {
@@ -414,9 +455,9 @@ function renderRegistration(user, existing, savedDraft = null) {
   function scheduleDraftSave() {
     if (existing) return;
     const draft = collectDraft();
-    localStorage.setItem(localDraftKey(user.id), JSON.stringify(draft));
+    localStorage.setItem(localDraftKey(draftOwner), JSON.stringify(draft));
     window.clearTimeout(draftTimer);
-    draftTimer = window.setTimeout(() => saveRegistrationDraft(user.id, draft), 600);
+    if (user) draftTimer = window.setTimeout(() => saveRegistrationDraft(user.id, draft), 600);
   }
 
   function updateRouteCount() {
@@ -459,11 +500,14 @@ function renderRegistration(user, existing, savedDraft = null) {
   fillRoutes();
   linkExistingTypedRoutes();
   const message = el("p", { class: "form-error", hidden: true });
-  const submit = el("button", { class: "find", type: "submit", text: existing ? "Send corrected application" : "Send for verification" });
+  const submit = el("button", { class: "find", type: "submit", text: accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification" });
   const form = el("form", { class: "stack registration-form" }, [
     el("div", { class: "form-section" }, [
       el("div", { class: "form-section-head" }, [el("strong", { text: "Driver details" }), el("span", { text: "Required" })]),
-      field("Driver name", fullName), field("Phone number", phone), field("Transport role", type)
+      field("Driver name", fullName), field("Phone number", phone),
+      accountSetup ? field("Create password", accountPasswordWrap) : null,
+      accountSetup ? accountStrength : null,
+      field("Transport role", type)
     ]),
     el("div", { class: "form-section" }, [
       el("div", { class: "form-section-head" }, [el("strong", { text: "Vehicle details" }), el("span", { text: "Required" })]),
@@ -480,7 +524,7 @@ function renderRegistration(user, existing, savedDraft = null) {
     el("p", { class: "privacy-hint" }, ["See how we use and protect your information in our ", el("a", { href: "../privacy/", text: "Privacy Notice" }), "."]),
     message, submit
   ]);
-  for (const input of [fullName, phone, type, vehicle, plate, manualRoutes]) {
+  for (const input of [fullName, phone, type, vehicle, plate, manualRoutes, ...(accountSetup ? [accountPassword] : [])]) {
     input.addEventListener("blur", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
     input.addEventListener("input", () => input.setAttribute("aria-invalid", "false"));
     input.addEventListener("change", () => input.setAttribute("aria-invalid", input.checkValidity() ? "false" : "true"));
@@ -489,6 +533,9 @@ function renderRegistration(user, existing, savedDraft = null) {
   }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    updateAccountStrength();
+    const normalizedPhone = normalizePhone(phone.value);
+    phone.setCustomValidity(normalizedPhone ? "" : "Enter a valid Botswana phone number.");
     const selectedRoutes = [...routeChoices.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
     const typedRoutes = splitRouteNames(manualRoutes.value);
     const resolvedRoutes = resolveSharedRoutes(catalog, type.value, selectedRoutes, typedRoutes);
@@ -500,26 +547,61 @@ function renderRegistration(user, existing, savedDraft = null) {
       return;
     }
     submit.disabled = true;
-    submit.textContent = "Sending application…";
+    submit.textContent = accountSetup ? "Creating account and sending…" : "Sending application…";
     message.hidden = true;
+    let activeUser = user;
+    if (accountSetup) {
+      const loginEmail = accountEmail(normalizedPhone);
+      let authResult = await db.auth.signUp({
+        email: loginEmail,
+        password: accountPassword.value,
+        options: { data: { phone: normalizedPhone } }
+      });
+      const duplicateAccount = /already|registered|exists/i.test(authResult.error?.message || "") ||
+        (!authResult.error && !authResult.data?.session && authResult.data?.user && !authResult.data.user.identities?.length);
+      if (duplicateAccount) authResult = await db.auth.signInWithPassword({ email: loginEmail, password: accountPassword.value });
+      if (authResult.error || !authResult.data?.user || !authResult.data?.session) {
+        submit.disabled = false;
+        submit.textContent = "Create account and send application";
+        message.textContent = duplicateAccount
+          ? "This phone number already has a login with a different password. Use Driver login to continue the saved registration."
+          : authResult.error?.message || "The driver account could not be created.";
+        message.hidden = false;
+        return;
+      }
+      activeUser = authResult.data.user;
+      localStorage.setItem(ROLE_CHOICE_KEY, "driver");
+    }
     const row = {
-      user_id: user.id, full_name: fullName.value.trim(), phone: phone.value.trim(), transport_type: type.value,
+      user_id: activeUser.id, full_name: fullName.value.trim(), phone: normalizedPhone || phone.value.trim(), transport_type: type.value,
       vehicle_description: vehicle.value.trim(),
       plate: plate.value.trim().toUpperCase(), route_ids: resolvedRoutes.ids,
       status: "pending", rejection_message: null, reviewed_at: null, reviewed_by: null
     };
     const { error } = await db.from("driver_profiles").upsert(row);
     submit.disabled = false;
-    submit.textContent = existing ? "Send corrected application" : "Send for verification";
+    submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
     if (error) { message.textContent = error.message; message.hidden = false; return; }
-    await clearRegistrationDraft(user.id);
+    localStorage.removeItem(localDraftKey(draftOwner));
+    await clearRegistrationDraft(activeUser.id);
     notify("Application sent for verification.");
-    renderDriver(user);
+    renderDriver(activeUser);
   });
   const intro = [];
   if (existing?.rejection_message) intro.push(el("div", { class: "status-panel rejected" }, [el("strong", { text: "Changes required" }), el("p", { text: existing.rejection_message })]));
   intro.push(el("p", { class: "lede", text: "Enter your contact, vehicle and route information for the administrator to verify." }), form);
-  shell(existing ? "Correct your application" : "Driver registration", intro, user);
+  if (accountSetup) {
+    clear(root);
+    root.append(el("section", { class: "card admin-card driver-card" }, [
+      brand(),
+      el("p", { class: "eyebrow", text: "DRIVER REGISTRATION" }),
+      el("h1", { text: "Create your driver profile" }),
+      ...intro,
+      el("a", { class: "driver-passenger-link combined-login-link", href: "./?mode=login", text: "Already registered? Driver login" })
+    ]));
+  } else {
+    shell(existing ? "Correct your application" : "Driver registration", intro, user);
+  }
 
   function applyDraft(draft) {
     fullName.value = draft.fullName || "";
@@ -543,7 +625,12 @@ function renderRegistration(user, existing, savedDraft = null) {
         el("p", { text: "We saved the information you entered previously on this registration." }),
         el("div", { class: "draft-choice-actions" }, [
           el("button", { type: "button", class: "find", onclick: () => { applyDraft(savedDraft); overlay.remove(); notify("Your registration draft was restored."); } }, ["Continue draft"]),
-          el("button", { type: "button", class: "ghost", onclick: async () => { await clearRegistrationDraft(user.id); overlay.remove(); notify("A fresh registration is ready."); } }, ["Start fresh"])
+          el("button", { type: "button", class: "ghost", onclick: async () => {
+            localStorage.removeItem(localDraftKey(draftOwner));
+            if (user) await clearRegistrationDraft(user.id);
+            overlay.remove();
+            notify("The saved draft was deleted. A fresh registration is ready.");
+          } }, ["Start fresh"])
         ])
       ])
     ]);

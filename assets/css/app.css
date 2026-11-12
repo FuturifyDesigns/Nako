@@ -467,6 +467,7 @@ h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; letter-spacing: -0.04
 .draft-choice-dialog > p:not(.eyebrow) { margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
 .draft-choice-actions { display: grid; gap: 9px; }
 .draft-choice-actions .find, .draft-choice-actions .ghost { width: 100%; }
+.combined-login-link { width: fit-content; margin-top: 4px; }
 .vehicle-details { display: grid; gap: 8px; padding: 12px; border: 1px solid #cfe0f3; border-radius: 14px; background: #f7fbff; }
 .vehicle-details-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 12px; }
 .vehicle-details-row span { color: var(--muted); }

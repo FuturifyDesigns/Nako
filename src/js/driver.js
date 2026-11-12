@@ -16,6 +16,8 @@ let idleEvidence = 0;
 let detectedMotionState = "idle";
 let lastStrongMovementAt = 0;
 let profileChannel = null;
+let profilePoll = null;
+let activeSharingUi = null;
 const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
@@ -330,6 +332,7 @@ function renderAuth() {
 
 async function renderDriver(user) {
   stopSharing(false);
+  activeSharingUi = null;
   clearProfileWatcher();
   clear(root);
   if (navigator.onLine) {
@@ -373,6 +376,8 @@ function shell(title, body, user) {
 function clearProfileWatcher() {
   if (profileChannel && db) db.removeChannel(profileChannel);
   profileChannel = null;
+  window.clearInterval(profilePoll);
+  profilePoll = null;
 }
 
 function watchProfile(user, onChange) {
@@ -387,7 +392,31 @@ function renderPending(user, profile) {
     el("div", { class: "status-panel pending" }, [el("strong", { text: `${profile.transport_type.toUpperCase()} · ${profile.plate}` }), el("p", { text: "Your information is waiting for an administrator to review it. This screen updates automatically." })]),
     el("p", { class: "hint", text: "You cannot share a live location until the application is approved." })
   ], user);
-  watchProfile(user, () => renderDriver(user));
+  function applyProfileChange(next, eventType = "UPDATE") {
+    if (eventType === "DELETE") {
+      clearProfileWatcher();
+      localStorage.removeItem(`${PROFILE_CACHE_PREFIX}${user.id}`);
+      db.auth.signOut({ scope: "local" }).finally(renderAuth);
+      return;
+    }
+    if (!next?.user_id || next.status === "pending") return;
+    localStorage.setItem(`${PROFILE_CACHE_PREFIX}${user.id}`, JSON.stringify(next));
+    clearProfileWatcher();
+    if (next.status === "approved") {
+      notify("Your driver account is approved and ready.");
+      renderApproved(user, next);
+    } else if (next.status === "banned") {
+      renderBanned(user, next);
+    } else {
+      renderRegistration(user, next);
+    }
+  }
+  watchProfile(user, (payload) => applyProfileChange(payload.new, payload.eventType));
+  profilePoll = window.setInterval(async () => {
+    if (document.hidden || !navigator.onLine) return;
+    const { data } = await db.from("driver_profiles").select("*").eq("user_id", user.id).maybeSingle();
+    if (data) applyProfileChange(data);
+  }, 8000);
 }
 
 function renderBanned(user, profile) {
@@ -678,6 +707,7 @@ function renderApproved(user, profile) {
     ])
   ]);
   const button = el("button", { type: "button", class: "find", text: "Turn location on" });
+  activeSharingUi = { status, detail, button };
   const warning = el("div", { class: "status-panel driver-warning", hidden: true });
   function paintWarning(text) {
     clear(warning);
@@ -804,7 +834,7 @@ function renderApproved(user, profile) {
     routeEditor,
     el("section", { class: "driver-share-panel" }, [
       status, detail, consentLabel, button,
-      el("p", { class: "background-location-note", text: "Location can keep updating while the PWA remains allowed to run in the background. Fully closing or force-stopping the app pauses GPS updates until NakoLive is opened again." })
+      el("p", { class: "background-location-note", text: "NakoLive keeps the GPS watch active while the phone allows this PWA to run in the background. If the operating system suspends or closes it, sharing resumes automatically when NakoLive is opened again." })
     ])
   ], user);
   watchProfile(user, async (payload) => {
@@ -948,9 +978,26 @@ function classifyMotion(position) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && watchId != null) lastSentAt = 0;
+  if (document.hidden) return;
+  lastSentAt = 0;
+  const stale = !lastPosition || Date.now() - Number(lastPosition.timestamp || 0) > 30000;
+  if (localStorage.getItem(SHARING_KEY) === "true" && activeSharingUi && (watchId == null || stale)) {
+    if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    startSharing(activeSharingUi.status, activeSharingUi.detail, activeSharingUi.button);
+  }
 });
-window.addEventListener("online", retryLatest);
+window.addEventListener("pageshow", () => {
+  if (localStorage.getItem(SHARING_KEY) === "true" && activeSharingUi && watchId == null) {
+    startSharing(activeSharingUi.status, activeSharingUi.detail, activeSharingUi.button);
+  }
+});
+window.addEventListener("online", () => {
+  retryLatest();
+  if (localStorage.getItem(SHARING_KEY) === "true" && activeSharingUi && watchId == null) {
+    startSharing(activeSharingUi.status, activeSharingUi.detail, activeSharingUi.button);
+  }
+});
 
 function distanceMeters(a, b) {
   const lat = ((a.latitude + b.latitude) / 2) * Math.PI / 180;

@@ -211,14 +211,17 @@ async function boot() {
     data = { session: null };
   }
   driverSession = data.session || null;
+  const sessionWasMissingAtBoot = !data.session;
   authWatcher?.unsubscribe();
   const watcher = db.auth.onAuthStateChange((event, session) => {
     if (session) driverSession = session;
     if (event === "SIGNED_OUT") driverSession = null;
     const awaitingDriverSession = !root.children.length || root.querySelector(".auth-form, .combined-login-link");
-    if (session && !profileSubmissionInProgress && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && awaitingDriverSession) {
+    // getSession() above owns normal page startup. Only recover here when it
+    // initially found nothing and Supabase restores the session just after it.
+    if (session && sessionWasMissingAtBoot && !profileSubmissionInProgress && event === "INITIAL_SESSION" && awaitingDriverSession) {
       localStorage.setItem(ROLE_CHOICE_KEY, "driver");
-      renderDriver(session.user);
+      window.setTimeout(() => renderDriver(session.user), 0);
     }
   });
   authWatcher = watcher.data.subscription;
@@ -386,6 +389,12 @@ async function renderDriver(user) {
   activeSharingUi = null;
   clearProfileWatcher();
   clear(root);
+  root.append(el("section", { class: "card admin-card driver-card", role: "status" }, [
+    brand(),
+    el("p", { class: "eyebrow", text: "DRIVER PORTAL" }),
+    el("h1", { text: "Opening your driver interface…" }),
+    el("p", { class: "lede", text: "Restoring your secure session and driver profile." })
+  ]));
   if (navigator.onLine) {
     const verified = await db.auth.getUser();
     const invalidLogin = verified.error && (/invalid|expired|not found|no user|jwt/i.test(verified.error.message || "") || verified.error.status === 401 || verified.error.status === 403);

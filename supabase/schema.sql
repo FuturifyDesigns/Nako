@@ -384,6 +384,27 @@ create table if not exists public.driver_registration_drafts (
   updated_at timestamptz not null default now()
 );
 
+create or replace function public.clear_submitted_driver_draft()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.driver_registration_drafts where user_id = new.user_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists driver_profile_clears_draft on public.driver_profiles;
+create trigger driver_profile_clears_draft
+after insert on public.driver_profiles
+for each row execute function public.clear_submitted_driver_draft();
+
+delete from public.driver_registration_drafts draft
+using public.driver_profiles profile
+where draft.user_id = profile.user_id;
+
 create table if not exists public.driver_locations (
   driver_id uuid primary key references public.driver_profiles(user_id) on delete cascade,
   transport_type text not null check (transport_type in ('taxi', 'kombi', 'bus')),

@@ -20,6 +20,7 @@ const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
 const DRAFT_KEY_PREFIX = "nakolive-driver-draft-v1:";
+const PROFILE_CACHE_PREFIX = "nakolive-driver-profile-v1:";
 let authWatcher = null;
 
 function manualRouteName(id) {
@@ -102,8 +103,17 @@ function notify(message, kind = "ok") {
 }
 
 async function profileFor(userId) {
-  const { data } = await db.from("driver_profiles").select("*").eq("user_id", userId).maybeSingle();
-  return data;
+  const cacheKey = `${PROFILE_CACHE_PREFIX}${userId}`;
+  const { data, error } = await db.from("driver_profiles").select("*").eq("user_id", userId).maybeSingle();
+  if (data) {
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+    return data;
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+    if (cached && (error || !data)) return cached;
+  } catch { /* Ignore a damaged profile cache. */ }
+  return null;
 }
 
 function localDraftKey(userId) {
@@ -582,10 +592,14 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
     submit.disabled = false;
     submit.textContent = accountSetup ? "Create account and send application" : existing ? "Send corrected application" : "Send for verification";
     if (error) { message.textContent = error.message; message.hidden = false; return; }
+    localStorage.setItem(`${PROFILE_CACHE_PREFIX}${activeUser.id}`, JSON.stringify(row));
     localStorage.removeItem(localDraftKey(draftOwner));
     await clearRegistrationDraft(activeUser.id);
+    const cleanUrl = new URL(location.href);
+    cleanUrl.searchParams.set("mode", "login");
+    history.replaceState({}, "", cleanUrl);
     notify("Application sent for verification.");
-    renderDriver(activeUser);
+    renderPending(activeUser, row);
   });
   const intro = [];
   if (existing?.rejection_message) intro.push(el("div", { class: "status-panel rejected" }, [el("strong", { text: "Changes required" }), el("p", { text: existing.rejection_message })]));

@@ -178,7 +178,8 @@ async function boot() {
   }
   authWatcher?.unsubscribe();
   const watcher = db.auth.onAuthStateChange((event, session) => {
-    if (session && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && root.querySelector(".auth-form")) {
+    const awaitingDriverSession = !root.children.length || root.querySelector(".auth-form, .combined-login-link");
+    if (session && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"].includes(event) && awaitingDriverSession) {
       localStorage.setItem(ROLE_CHOICE_KEY, "driver");
       renderDriver(session.user);
     }

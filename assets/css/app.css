@@ -672,6 +672,17 @@ html[data-mode="gate"] #app { display: none; }
 .driver-signout { min-height: 38px; padding: 0 13px; border: 1px solid #cbd8e7; border-radius: 999px; background: #f4f7fb; color: #42546a; font-size: 12px; font-weight: 850; }
 .driver-signout:hover { border-color: #9fb5ce; background: #eaf1f8; color: #173b66; }
 .background-location-note { margin: 0; padding: 10px 12px; border-radius: 13px; background: #eef5ff; color: #35536f; font-size: 11px; line-height: 1.45; }
+.driver-map-panel { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--line); border-radius: 17px; background: #fff; }
+.driver-map-explainer { margin: 0; line-height: 1.45; }
+.driver-map-wrap { position: relative; min-height: 270px; overflow: hidden; border: 1px solid #c9d9e9; border-radius: 16px; background: #e8edf2; }
+.driver-live-map { position: absolute; inset: 0; }
+.driver-map-message { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; background: #eef4fa; color: #52677d; text-align: center; font-size: 13px; font-weight: 750; }
+.driver-map-message[hidden] { display: none; }
+.driver-map-state { padding: 6px 9px; border-radius: 999px; background: #eef3f8; color: #52677d; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.driver-map-state.is-moving { background: #e8f8ee; color: #18763b; }
+.driver-map-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.driver-map-foot .hint { margin: 0; }
+.driver-map-recenter { min-height: 38px; padding: 7px 11px; flex: 0 0 auto; color: #155ba4; border-color: #9fc5ef; background: #eaf4ff; font-size: 11px; font-weight: 850; }
 
 @media (min-width: 900px) {
   .hero { grid-template-columns: 1.1fr 0.9fr; }
@@ -697,6 +708,9 @@ html[data-mode="gate"] #app { display: none; }
   .driver-card { margin: 8px auto 150px; padding: 18px; border-radius: 24px; }
   .driver-role-hero { grid-template-columns: 1fr 112px; }
   .driver-role-hero img { width: 112px; height: 80px; }
+  .driver-map-wrap { min-height: 250px; }
+  .driver-map-foot { align-items: stretch; flex-direction: column; }
+  .driver-map-recenter { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .radar { animation: none; }

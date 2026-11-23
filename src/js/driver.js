@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { clear, el } from "./dom.js";
+import { createGoogleMap, createGoogleVehicleLayer, googleMapsConfigured } from "./google-map.js";
 import { isHandheld } from "./session.js";
 import { currentCatalog, startSync, supabaseClient } from "./sync.js";
 
@@ -18,6 +19,7 @@ let lastStrongMovementAt = 0;
 let profileChannel = null;
 let profilePoll = null;
 let activeSharingUi = null;
+let activeDriverMap = null;
 let profileSubmissionInProgress = false;
 const ROLE_CHOICE_KEY = "nakolive-role-choice-v1";
 const SHARING_KEY = "nakolive-driver-sharing-v1";
@@ -105,6 +107,71 @@ function notify(message, kind = "ok") {
   const toast = el("div", { class: `action-toast ${kind}`, role: "status", text: message });
   document.body.append(toast);
   window.setTimeout(() => toast.remove(), 4200);
+}
+
+function destroyDriverMap() {
+  const current = activeDriverMap;
+  activeDriverMap = null;
+  if (!current) return;
+  if (current.channel && db) db.removeChannel(current.channel);
+  current.layer?.clear();
+  current.map?.remove();
+}
+
+function updateDriverMapPosition(point, motionState = "idle", sampledAt = new Date().toISOString()) {
+  const current = activeDriverMap;
+  if (!current || !point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return;
+  const vehicle = {
+    id: current.userId,
+    type: current.profile.transport_type,
+    plate: current.profile.plate,
+    routeIds: current.profile.route_ids || [],
+    lat: Number(point.lat),
+    lng: Number(point.lng),
+    state: motionState === "moving" ? "moving" : "idle"
+  };
+  current.latest = vehicle;
+  current.layer?.setVehicles([vehicle]);
+  current.state.textContent = vehicle.state === "moving" ? "On the move" : "Idle";
+  current.state.classList.toggle("is-moving", vehicle.state === "moving");
+  const accuracy = Number(point.accuracy || 0);
+  const time = new Date(sampledAt || Date.now());
+  current.detail.textContent = `${accuracy ? `Accuracy about ${Math.round(accuracy)} m · ` : ""}Updated ${time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  if (!current.hasCentered && current.map) {
+    current.map.easeTo({ center: [vehicle.lng, vehicle.lat], zoom: 16 });
+    current.hasCentered = true;
+  }
+}
+
+async function mountDriverMap(user, profile, canvas, message, state, detail) {
+  destroyDriverMap();
+  const instance = { userId: user.id, profile, canvas, message, state, detail, map: null, layer: null, channel: null, latest: null, hasCentered: false };
+  activeDriverMap = instance;
+  if (!googleMapsConfigured()) {
+    message.textContent = navigator.onLine ? "The map could not be configured." : "Connect to the internet to load the map. Location sharing will sync when you are online.";
+    return;
+  }
+  try {
+    const { data: saved } = await db.from("driver_locations")
+      .select("driver_id,transport_type,plate,route_ids,lat,lng,accuracy,motion_state,sampled_at")
+      .eq("driver_id", user.id).maybeSingle();
+    const center = saved ? { lat: Number(saved.lat), lng: Number(saved.lng) } : { lat: -24.6282, lng: 25.9231 };
+    const map = await createGoogleMap(canvas, { center, zoom: saved ? 16 : 12 });
+    if (activeDriverMap !== instance || !canvas.isConnected) { map.remove(); return; }
+    instance.map = map;
+    instance.layer = createGoogleVehicleLayer(map);
+    message.hidden = true;
+    if (saved) updateDriverMapPosition(saved, saved.motion_state, saved.sampled_at);
+    else if (instance.latest) updateDriverMapPosition(instance.latest, instance.latest.state);
+    instance.channel = db.channel(`driver-map-${user.id}-${crypto.randomUUID()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_locations", filter: `driver_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === "DELETE" || !payload.new?.sharing) return;
+        updateDriverMapPosition(payload.new, payload.new.motion_state, payload.new.sampled_at);
+      })
+      .subscribe();
+  } catch {
+    if (activeDriverMap === instance) message.textContent = "The live map could not load. Location sharing can still continue.";
+  }
 }
 
 async function withTimeout(promise, milliseconds, message) {
@@ -253,6 +320,7 @@ async function boot() {
 }
 
 function renderAuth() {
+  destroyDriverMap();
   if (new URLSearchParams(location.search).get("mode") === "register") {
     let savedDraft = null;
     try { savedDraft = JSON.parse(localStorage.getItem(localDraftKey("new")) || "null"); } catch { /* Ignore a damaged local draft. */ }
@@ -518,6 +586,7 @@ function renderRecoveryNewPassword() {
 
 async function renderDriver(user) {
   stopSharing(false);
+  destroyDriverMap();
   activeSharingUi = null;
   clearProfileWatcher();
   clear(root);
@@ -937,6 +1006,16 @@ function renderApproved(user, profile) {
   const routeChips = el("div", { class: "driver-route-chips" });
   const routeEditor = el("section", { class: "form-section route-picker approved-route-editor", hidden: true });
   const manageRoutes = el("button", { type: "button", class: "ghost compact-route-action", text: "Change routes" });
+  const mapCanvas = el("div", { class: "driver-live-map", role: "img", "aria-label": "Your live vehicle location" });
+  const mapMessage = el("p", { class: "driver-map-message", text: "Loading your live map…" });
+  const mapState = el("span", { class: "driver-map-state", text: "Waiting for location" });
+  const mapDetail = el("p", { class: "hint", text: "Turn location on to place your vehicle on this map and the passenger map." });
+  const recenter = el("button", { type: "button", class: "ghost driver-map-recenter", text: "Centre on my vehicle" });
+  recenter.addEventListener("click", () => {
+    const current = activeDriverMap;
+    if (!current?.latest || !current.map) { notify("Turn location on so we can find your vehicle.", "error"); return; }
+    current.map.easeTo({ center: [current.latest.lng, current.latest.lat], zoom: 16 });
+  });
 
   function paintAssignedRoutes() {
     const assignedRoutes = routeLabels(profile.route_ids);
@@ -1050,11 +1129,18 @@ function renderApproved(user, profile) {
       manageRoutes
     ]),
     routeEditor,
+    el("section", { class: "driver-map-panel" }, [
+      el("div", { class: "form-section-head" }, [el("strong", { text: "Your live location" }), mapState]),
+      el("p", { class: "hint driver-map-explainer", text: "This is the same position passengers receive. Your marker updates here after NakoLive successfully publishes it." }),
+      el("div", { class: "driver-map-wrap" }, [mapCanvas, mapMessage]),
+      el("div", { class: "driver-map-foot" }, [mapDetail, recenter])
+    ]),
     el("section", { class: "driver-share-panel" }, [
       status, detail, consentLabel, button,
       el("p", { class: "background-location-note", text: "NakoLive keeps the GPS watch active while the phone allows this PWA to run in the background. If the operating system suspends or closes it, sharing resumes automatically when NakoLive is opened again." })
     ])
   ], user);
+  mountDriverMap(user, profile, mapCanvas, mapMessage, mapState, mapDetail);
   watchProfile(user, async (payload) => {
     const next = payload.new || {};
     if (payload.eventType === "DELETE" || next.status !== "approved") {
@@ -1075,6 +1161,11 @@ function startSharing(status, detail, button) {
   if (!navigator.geolocation) { notify("Location is not available on this device.", "error"); return; }
   if (watchId != null) return;
   localStorage.setItem(SHARING_KEY, "true");
+  if (activeDriverMap) {
+    activeDriverMap.state.textContent = "Finding GPS";
+    activeDriverMap.state.classList.remove("is-moving");
+    activeDriverMap.detail.textContent = "Waiting for an accurate position…";
+  }
   button.disabled = true;
   detail.textContent = "Waiting for an accurate GPS position…";
   watchId = navigator.geolocation.watchPosition(async (position) => {
@@ -1095,6 +1186,8 @@ function startSharing(status, detail, button) {
     };
     localStorage.setItem(QUEUED_LOCATION_KEY, JSON.stringify(locationPayload));
     if (!navigator.onLine) {
+      updateDriverMapPosition({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy }, motion, new Date(position.timestamp).toISOString());
+      if (activeDriverMap) activeDriverMap.detail.textContent = "Offline · this position will appear for passengers after it syncs.";
       button.disabled = false;
       lastSentPosition = position;
       lastMotionState = motion;
@@ -1117,6 +1210,11 @@ function startSharing(status, detail, button) {
     lastSentPosition = position;
     const publishedState = data?.motion_state || motion;
     lastMotionState = publishedState;
+    updateDriverMapPosition({
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: position.coords.accuracy
+    }, publishedState, new Date(position.timestamp).toISOString());
     status.textContent = publishedState === "moving" ? "On the move" : "Idle";
     detail.textContent = `Location on · accuracy about ${Math.round(position.coords.accuracy)} m · updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     button.textContent = "Turn location off";
@@ -1160,6 +1258,11 @@ async function stopSharing(remote = true, status, detail, button) {
   if (remote) localStorage.setItem(SHARING_KEY, "false");
   if (remote) localStorage.removeItem(QUEUED_LOCATION_KEY);
   if (remote && db) await db.rpc("stop_driver_location");
+  if (activeDriverMap) {
+    activeDriverMap.state.textContent = "Not visible";
+    activeDriverMap.state.classList.remove("is-moving");
+    activeDriverMap.detail.textContent = "Location sharing is off. Passengers cannot see this vehicle.";
+  }
   if (status) status.textContent = "Location is off";
   if (detail) detail.textContent = "Passengers cannot see this vehicle until you turn location on.";
   if (button) { button.textContent = "Turn location on"; button.disabled = false; }

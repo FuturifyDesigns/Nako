@@ -84,9 +84,7 @@ function renderDashboard(root, client) {
   const mix = el("div", { class: "panel" });
   const routesPanel = el("div", { class: "panel wide" });
   const applicationsPanel = el("div", { class: "panel wide" });
-  const passwordResetsPanel = el("div", { class: "panel wide" });
   let applicationsMounted = false;
-  let passwordResetsMounted = false;
   const notice = el("p", { class: "hint", text: "Loading usage…" });
   const liveState = el("span", { class: "live-dot", text: "Live" });
   const pageTitle = el("h1", { text: "Overview" });
@@ -98,17 +96,15 @@ function renderDashboard(root, client) {
   ]);
   const driversView = el("section", { class: "admin-view", "data-view": "drivers", hidden: true }, [applicationsPanel]);
   const routesView = el("section", { class: "admin-view", "data-view": "routes", hidden: true }, [routesPanel]);
-  const passwordResetsView = el("section", { class: "admin-view", "data-view": "passwords", hidden: true }, [passwordResetsPanel]);
   const nav = el("nav", { class: "admin-nav", "aria-label": "Admin sections" });
   const sections = {
     overview: { label: "Overview", copy: "A simple view of usage across the NakoLive network.", icon: "01" },
     drivers: { label: "Driver approvals", copy: "Review taxi, kombi and bus applications in separate queues.", icon: "02" },
-    routes: { label: "Route management", copy: "Publish and maintain the routes passengers can select.", icon: "03" },
-    passwords: { label: "Password resets", copy: "Verify drivers and issue secure one-time recovery codes.", icon: "04" }
+    routes: { label: "Route management", copy: "Publish and maintain the routes passengers can select.", icon: "03" }
   };
 
   function setView(view) {
-    for (const panel of [overviewView, driversView, routesView, passwordResetsView]) panel.hidden = panel.dataset.view !== view;
+    for (const panel of [overviewView, driversView, routesView]) panel.hidden = panel.dataset.view !== view;
     for (const button of nav.children) {
       const active = button.dataset.view === view;
       button.classList.toggle("is-active", active);
@@ -116,10 +112,6 @@ function renderDashboard(root, client) {
     }
     pageTitle.textContent = sections[view].label;
     pageCopy.textContent = sections[view].copy;
-    if (view === "passwords" && !passwordResetsMounted) {
-      passwordResetsMounted = true;
-      paintPasswordResets(passwordResetsPanel, client);
-    }
   }
 
   for (const [view, section] of Object.entries(sections)) {
@@ -143,8 +135,7 @@ function renderDashboard(root, client) {
       ]),
       overviewView,
       driversView,
-      routesView,
-      passwordResetsView
+      routesView
     ])
   ]));
 
@@ -179,100 +170,6 @@ function renderDashboard(root, client) {
     routeRefreshTimer = window.setTimeout(() => paintRoutes(routesPanel, client), 180);
   });
   window.setInterval(() => { if (!document.hidden) load(); }, 30000);
-}
-
-function paintPasswordResets(panel, client) {
-  clear(panel);
-  const list = el("div", { class: "application-list" });
-  panel.append(
-    el("div", { class: "step-row" }, [el("h2", { text: "Driver password recovery" }), el("span", { class: "live-dot", text: "Secure" })]),
-    el("p", { class: "hint", text: "Verify the driver's identity using their registered phone number before issuing a code. Codes expire after 30 minutes and can be used only once." }),
-    list
-  );
-
-  async function load() {
-    clear(list);
-    list.append(el("p", { class: "hint", text: "Loading reset requests…" }));
-    const { data, error } = await client.from("driver_password_reset_requests")
-      .select("id,phone,status,attempts,expires_at,issued_at,used_at,created_at")
-      .in("status", ["pending", "issued"])
-      .order("created_at", { ascending: false });
-    clear(list);
-    if (error) {
-      list.append(el("p", { class: "form-error", text: "Password reset requests are unavailable. Apply the latest Supabase schema." }));
-      return;
-    }
-    if (!data?.length) {
-      list.append(el("p", { class: "hint", text: "No drivers are waiting for password recovery." }));
-      return;
-    }
-    for (const request of data) list.append(resetCard(request));
-  }
-
-  function resetCard(request) {
-    const feedback = el("div", { class: "password-reset-result", hidden: true, role: "status" });
-    const issue = el("button", { type: "button", class: "find compact", text: request.status === "issued" ? "Issue new code" : "Verify and issue code" });
-    const cancel = el("button", { type: "button", class: "ghost", text: "Cancel request" });
-    issue.addEventListener("click", async () => {
-      if (!window.confirm(`Have you verified the identity of the driver using ${request.phone}?`)) return;
-      issue.disabled = true;
-      issue.textContent = "Generating…";
-      const { data, error } = await client.rpc("admin_issue_driver_password_reset", { p_request_id: request.id });
-      issue.disabled = false;
-      issue.textContent = "Issue new code";
-      clear(feedback);
-      feedback.hidden = false;
-      if (error || !data?.code) {
-        feedback.className = "password-reset-result is-error";
-        feedback.append(el("strong", { text: "Code could not be issued" }), el("p", { text: error?.message || "Try again." }));
-        return;
-      }
-      feedback.className = "password-reset-result";
-      const code = el("strong", { class: "password-reset-code", text: data.code });
-      const copy = el("button", { type: "button", class: "ghost", text: "Copy code" });
-      copy.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(data.code);
-        copy.textContent = "Copied";
-      });
-      feedback.append(
-        el("p", { text: `Give this one-time code to the verified driver at ${data.phone}. It expires in 30 minutes.` }),
-        el("div", { class: "password-reset-code-row" }, [code, copy])
-      );
-    });
-    cancel.addEventListener("click", async () => {
-      if (!window.confirm("Cancel this password reset request?")) return;
-      cancel.disabled = true;
-      const { error } = await client.rpc("admin_cancel_driver_password_reset", { p_request_id: request.id });
-      if (error) {
-        cancel.disabled = false;
-        clear(feedback);
-        feedback.hidden = false;
-        feedback.className = "password-reset-result is-error";
-        feedback.append(el("p", { text: "The request could not be cancelled." }));
-        return;
-      }
-      load();
-    });
-    const age = timeAgo(request.created_at);
-    const expires = request.expires_at ? new Date(request.expires_at) : null;
-    const expired = expires && expires.getTime() <= Date.now();
-    return el("article", { class: "application-card password-reset-card" }, [
-      el("div", { class: "application-head" }, [
-        el("div", {}, [el("strong", { text: request.phone }), el("span", { text: `Requested ${age}` })]),
-        el("span", { class: "status-pill", text: expired ? "expired" : request.status })
-      ]),
-      request.status === "issued"
-        ? el("p", { class: "hint", text: expired ? "The previous code expired. Issue a new one after verifying the driver again." : `A code was issued${request.issued_at ? ` ${timeAgo(request.issued_at)}` : ""}. Attempts: ${request.attempts}/5.` })
-        : el("p", { class: "hint", text: "Call or otherwise verify this driver before issuing a recovery code." }),
-      el("div", { class: "row-actions" }, [issue, cancel]),
-      feedback
-    ]);
-  }
-
-  load();
-  client.channel("admin-password-reset-requests")
-    .on("postgres_changes", { event: "*", schema: "public", table: "driver_password_reset_requests" }, load)
-    .subscribe();
 }
 
 function stat(label, value) {

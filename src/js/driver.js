@@ -267,18 +267,13 @@ function renderAuth() {
   ]);
   const message = el("p", { class: "form-error", hidden: true });
   const button = el("button", { class: "find", type: "submit", text: "Continue" });
-  const forgotPassword = el("button", { type: "button", class: "text-button auth-recovery-link", text: "Forgot password?" });
-  forgotPassword.addEventListener("click", renderPasswordRecovery);
   const privacyNote = el("p", { class: "privacy-hint" }, [
     "By creating an account, you acknowledge the ",
     el("a", { href: "../privacy/", text: "Privacy & data protection notice" }),
     "."
   ]);
   const identifierField = el("label", { class: "field-label auth-field" }, [identifierLabel, identifier]);
-  const form = el("form", { class: "stack auth-form" }, [
-    field("What would you like to do?", mode), identifierField, field("Password", passwordInput), strength,
-    privacyNote, message, button, forgotPassword
-  ]);
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), identifierField, field("Password", passwordInput), strength, privacyNote, message, button]);
 
   function passwordScore(value) {
     if (!value) return 0;
@@ -312,7 +307,6 @@ function renderAuth() {
     password.autocomplete = registering ? "new-password" : "current-password";
     password.minLength = registering ? 10 : 8;
     password.placeholder = registering ? "Create a strong password" : "Enter your password";
-    forgotPassword.hidden = registering;
     updateStrength();
   }
 
@@ -388,140 +382,6 @@ function renderAuth() {
     el("h1", { text: "Register and share your location" }),
     el("p", { class: "lede", text: "Approved taxi, kombi and bus drivers can appear on the passenger map while location sharing is on." }), form
   ]));
-}
-
-function renderPasswordRecovery() {
-  clear(root);
-  const phone = el("input", {
-    type: "tel", required: "true", inputmode: "tel", autocomplete: "tel",
-    maxlength: "30", value: "+267", placeholder: "+267 71 234 567"
-  });
-  const message = el("p", { class: "form-error", hidden: true, role: "status" });
-  const submit = el("button", { type: "submit", class: "find", text: "Request reset code" });
-  const requestForm = el("form", { class: "stack auth-form" }, [
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "Phone number" }), phone]),
-    el("p", { class: "privacy-hint", text: "For your security, an administrator must verify you before issuing a one-time reset code." }),
-    message,
-    submit,
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
-  ]);
-  const host = el("div");
-  const card = el("section", { class: "card admin-card driver-card" }, [
-    brand(),
-    el("p", { class: "eyebrow", text: "ACCOUNT RECOVERY" }),
-    el("h1", { text: "Reset your password" }),
-    el("p", { class: "lede", text: "Enter the phone number used for your driver account." }),
-    host
-  ]);
-  host.append(requestForm);
-  root.append(card);
-
-  requestForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const normalized = normalizePhone(phone.value);
-    phone.setCustomValidity(normalized ? "" : "Enter a valid Botswana phone number.");
-    if (!requestForm.reportValidity()) return;
-    submit.disabled = true;
-    submit.textContent = "Sending request…";
-    message.hidden = true;
-    const { data, error } = await withTimeout(
-      db.rpc("request_driver_password_reset", { p_phone: normalized }),
-      15000,
-      "The request took too long. Check your connection and try again."
-    ).catch((requestError) => ({ data: null, error: requestError }));
-    submit.disabled = false;
-    submit.textContent = "Request reset code";
-    if (error || !data?.request_id) {
-      message.textContent = error?.message || "The reset request could not be sent.";
-      message.hidden = false;
-      return;
-    }
-    renderResetCodeForm(host, data.request_id);
-  });
-}
-
-function renderResetCodeForm(host, requestId) {
-  clear(host);
-  const code = el("input", {
-    required: "true", minlength: "8", maxlength: "8", pattern: "[A-Fa-f0-9]{8}",
-    inputmode: "text", autocomplete: "one-time-code", autocapitalize: "characters", placeholder: "8-character code"
-  });
-  const password = el("input", {
-    type: "password", required: "true", minlength: "10", maxlength: "72",
-    autocomplete: "new-password", placeholder: "Create a strong password"
-  });
-  const confirm = el("input", {
-    type: "password", required: "true", minlength: "10", maxlength: "72",
-    autocomplete: "new-password", placeholder: "Repeat the new password"
-  });
-  const toggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
-  const passwordWrap = el("div", { class: "password-input-wrap" }, [password, toggle]);
-  const strengthLabel = el("span", { class: "strength-label" });
-  const strength = el("div", { class: "password-strength", hidden: true, role: "status" }, [
-    el("div", { class: "strength-row" }, [el("strong", { text: "Password strength" }), strengthLabel]),
-    el("div", { class: "strength-bars", "aria-hidden": "true" }, [0, 1, 2, 3, 4].map(() => el("span"))),
-    el("small", { text: "Use 10+ characters with uppercase, lowercase, a number and a symbol." })
-  ]);
-  const message = el("p", { class: "form-error", hidden: true, role: "status" });
-  const submit = el("button", { type: "submit", class: "find", text: "Set new password" });
-
-  function updateStrength() {
-    const value = password.value;
-    const score = [value.length >= 10, /[a-z]/.test(value) && /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value), value.length >= 14].filter(Boolean).length;
-    strength.hidden = !value;
-    strength.dataset.score = String(score);
-    strengthLabel.textContent = ["Very weak", "Weak", "Fair", "Good", "Strong", "Very strong"][score];
-    password.setCustomValidity(value && score < 4 ? "Use uppercase, lowercase, a number and a symbol." : "");
-    confirm.setCustomValidity(confirm.value && confirm.value !== value ? "Passwords do not match." : "");
-  }
-  password.addEventListener("input", updateStrength);
-  confirm.addEventListener("input", updateStrength);
-  toggle.addEventListener("click", () => {
-    const showing = password.type === "text";
-    password.type = showing ? "password" : "text";
-    confirm.type = showing ? "password" : "text";
-    toggle.textContent = showing ? "Show" : "Hide";
-    toggle.setAttribute("aria-pressed", showing ? "false" : "true");
-  });
-
-  const form = el("form", { class: "stack auth-form" }, [
-    el("div", { class: "status-panel pending" }, [
-      el("strong", { text: "Request received" }),
-      el("p", { text: "Ask the NakoLive administrator to verify you and provide the one-time code. The code expires 30 minutes after it is issued." })
-    ]),
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "Reset code" }), code]),
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "New password" }), passwordWrap]),
-    strength,
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "Confirm new password" }), confirm]),
-    message,
-    submit,
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderPasswordRecovery, text: "Request another code" }),
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
-  ]);
-  host.append(form);
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    updateStrength();
-    if (!form.reportValidity()) return;
-    submit.disabled = true;
-    submit.textContent = "Updating password…";
-    message.hidden = true;
-    const { data, error } = await withTimeout(db.rpc("confirm_driver_password_reset", {
-      p_request_id: requestId,
-      p_code: code.value.trim().toUpperCase(),
-      p_new_password: password.value
-    }), 15000, "The password update took too long. Try again.").catch((requestError) => ({ data: null, error: requestError }));
-    submit.disabled = false;
-    submit.textContent = "Set new password";
-    if (error || !data?.ok) {
-      message.textContent = data?.message || error?.message || "The password could not be updated.";
-      message.hidden = false;
-      return;
-    }
-    renderAuth();
-    notify("Password updated. Sign in with your new password.");
-  });
 }
 
 async function renderDriver(user) {

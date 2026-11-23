@@ -567,12 +567,6 @@ html[data-mode="gate"] #app { display: none; }
 .route-checkbox strong { font-size: 13px; }
 .route-checkbox small { color: var(--muted); font-size: 11px; }
 .auth-form { margin-top: 16px; }
-.auth-recovery-link { align-self: center; padding: 8px 4px; font-weight: 800; }
-.password-reset-result { display: grid; gap: 10px; padding: 14px; border: 1px solid #9bd8b5; border-radius: 16px; background: #effcf4; color: #14532d; }
-.password-reset-result.is-error { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
-.password-reset-code-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.password-reset-code { padding: 10px 14px; border-radius: 12px; background: #0b2139; color: #fff; font: 900 22px/1 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .12em; }
-.password-reset-card { align-content: start; }
 .password-input-wrap { position: relative; width: 100%; }
 .password-input-wrap input { width: 100%; padding-right: 76px !important; }
 .password-toggle { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); min-width: 56px; min-height: 34px; padding: 0 10px; border: 1px solid #cbd8e7; border-radius: 10px; background: #f2f6fb; color: #244766; font-size: 12px; font-weight: 850; }

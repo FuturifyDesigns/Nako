@@ -384,25 +384,6 @@ create table if not exists public.driver_registration_drafts (
   updated_at timestamptz not null default now()
 );
 
-create extension if not exists pgcrypto with schema extensions;
-
-create table if not exists public.driver_password_reset_requests (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  phone text not null,
-  status text not null default 'pending' check (status in ('pending', 'issued', 'used', 'cancelled')),
-  code_hash text,
-  attempts integer not null default 0 check (attempts between 0 and 5),
-  expires_at timestamptz,
-  issued_at timestamptz,
-  issued_by uuid references auth.users(id),
-  used_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists driver_password_resets_queue_idx
-  on public.driver_password_reset_requests (status, created_at desc);
-
 create or replace function public.clear_submitted_driver_draft()
 returns trigger
 language plpgsql
@@ -702,162 +683,6 @@ begin
 end;
 $$;
 
-create or replace function public.request_driver_password_reset(p_phone text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  digits text := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
-  matched_user uuid;
-  display_phone text;
-  existing_request uuid;
-  request_id uuid := gen_random_uuid();
-begin
-  if digits like '00%' then digits := substring(digits from 3); end if;
-  if digits like '0%' and char_length(digits) = 9 then digits := '267' || substring(digits from 2); end if;
-  if char_length(digits) = 8 then digits := '267' || digits; end if;
-  if char_length(digits) < 8 or char_length(digits) > 15 then
-    return jsonb_build_object('ok', true, 'request_id', request_id);
-  end if;
-
-  select u.id,
-         coalesce(p.phone, u.raw_user_meta_data ->> 'phone', '+' || digits)
-  into matched_user, display_phone
-  from auth.users u
-  left join public.driver_profiles p on p.user_id = u.id
-  where regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = digits
-     or lower(u.email) = lower(digits || '@phone.nakolive.co.bw')
-  order by u.created_at desc
-  limit 1;
-
-  -- Always return the same shape so this public function cannot be used to
-  -- discover which phone numbers have NakoLive accounts.
-  if matched_user is null then
-    return jsonb_build_object('ok', true, 'request_id', request_id);
-  end if;
-
-  select id into existing_request
-  from public.driver_password_reset_requests
-  where user_id = matched_user
-    and status in ('pending', 'issued')
-    and created_at > now() - interval '5 minutes'
-  order by created_at desc
-  limit 1;
-
-  if existing_request is not null then
-    return jsonb_build_object('ok', true, 'request_id', existing_request);
-  end if;
-
-  update public.driver_password_reset_requests
-  set status = 'cancelled', updated_at = now()
-  where user_id = matched_user and status in ('pending', 'issued');
-
-  insert into public.driver_password_reset_requests (id, user_id, phone)
-  values (request_id, matched_user, display_phone);
-
-  return jsonb_build_object('ok', true, 'request_id', request_id);
-end;
-$$;
-
-create or replace function public.admin_issue_driver_password_reset(p_request_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  reset_request public.driver_password_reset_requests%rowtype;
-  reset_code text := upper(substring(encode(gen_random_bytes(8), 'hex') from 1 for 8));
-begin
-  if not public.is_admin() then raise exception 'not allowed'; end if;
-
-  select * into reset_request
-  from public.driver_password_reset_requests
-  where id = p_request_id and status in ('pending', 'issued')
-  for update;
-  if reset_request.id is null then raise exception 'reset request not available'; end if;
-
-  update public.driver_password_reset_requests
-  set status = 'issued', code_hash = crypt(reset_code, gen_salt('bf')),
-      attempts = 0, issued_at = now(), issued_by = auth.uid(),
-      expires_at = now() + interval '30 minutes', updated_at = now()
-  where id = p_request_id;
-
-  return jsonb_build_object(
-    'ok', true,
-    'code', reset_code,
-    'phone', reset_request.phone,
-    'expires_at', now() + interval '30 minutes'
-  );
-end;
-$$;
-
-create or replace function public.admin_cancel_driver_password_reset(p_request_id uuid)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if not public.is_admin() then raise exception 'not allowed'; end if;
-  update public.driver_password_reset_requests
-  set status = 'cancelled', code_hash = null, expires_at = null, updated_at = now()
-  where id = p_request_id and status in ('pending', 'issued');
-end;
-$$;
-
-create or replace function public.confirm_driver_password_reset(
-  p_request_id uuid,
-  p_code text,
-  p_new_password text
-) returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  reset_request public.driver_password_reset_requests%rowtype;
-  clean_code text := upper(trim(coalesce(p_code, '')));
-begin
-  if char_length(p_new_password) < 10 or char_length(p_new_password) > 72
-     or p_new_password !~ '[a-z]' or p_new_password !~ '[A-Z]'
-     or p_new_password !~ '[0-9]' or p_new_password !~ '[^A-Za-z0-9]' then
-    return jsonb_build_object('ok', false, 'message', 'Use 10–72 characters with uppercase, lowercase, a number and a symbol.');
-  end if;
-
-  select * into reset_request
-  from public.driver_password_reset_requests
-  where id = p_request_id
-  for update;
-
-  if reset_request.id is null or reset_request.status <> 'issued'
-     or reset_request.expires_at <= now() or reset_request.attempts >= 5 then
-    return jsonb_build_object('ok', false, 'message', 'This reset code is invalid or expired. Request a new one.');
-  end if;
-
-  if reset_request.code_hash is null
-     or crypt(clean_code, reset_request.code_hash) <> reset_request.code_hash then
-    update public.driver_password_reset_requests
-    set attempts = least(attempts + 1, 5), updated_at = now()
-    where id = p_request_id;
-    return jsonb_build_object('ok', false, 'message', 'This reset code is invalid or expired. Request a new one.');
-  end if;
-
-  update auth.users
-  set encrypted_password = crypt(p_new_password, gen_salt('bf')), updated_at = now()
-  where id = reset_request.user_id;
-
-  delete from auth.sessions where user_id = reset_request.user_id;
-  update public.driver_password_reset_requests
-  set status = 'used', code_hash = null, used_at = now(), updated_at = now()
-  where id = p_request_id;
-
-  return jsonb_build_object('ok', true);
-end;
-$$;
-
 create or replace function public.review_driver(p_driver_id uuid, p_status text, p_message text default null)
 returns void language plpgsql security definer set search_path = public
 as $$
@@ -983,7 +808,6 @@ $$;
 alter table public.driver_profiles enable row level security;
 alter table public.driver_locations enable row level security;
 alter table public.driver_registration_drafts enable row level security;
-alter table public.driver_password_reset_requests enable row level security;
 
 drop policy if exists driver_profiles_own_select on public.driver_profiles;
 create policy driver_profiles_own_select on public.driver_profiles for select to authenticated
@@ -1006,15 +830,9 @@ for all to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
-drop policy if exists driver_password_resets_admin_select on public.driver_password_reset_requests;
-create policy driver_password_resets_admin_select on public.driver_password_reset_requests
-for select to authenticated using (public.is_admin());
-
 grant select, insert, update on public.driver_profiles to authenticated;
 grant select on public.driver_locations to anon, authenticated;
 grant select, insert, update, delete on public.driver_registration_drafts to authenticated;
-revoke all on public.driver_password_reset_requests from anon, authenticated;
-grant select on public.driver_password_reset_requests to authenticated;
 revoke all on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) from public;
 grant execute on function public.publish_driver_location(double precision, double precision, double precision, double precision, double precision, timestamptz, text) to authenticated;
 revoke all on function public.stop_driver_location() from public;
@@ -1023,14 +841,6 @@ revoke all on function public.update_driver_routes(text[]) from public;
 grant execute on function public.update_driver_routes(text[]) to authenticated;
 revoke all on function public.submit_driver_profile(text, text, text, text, text, text[]) from public;
 grant execute on function public.submit_driver_profile(text, text, text, text, text, text[]) to authenticated;
-revoke all on function public.request_driver_password_reset(text) from public;
-grant execute on function public.request_driver_password_reset(text) to anon, authenticated;
-revoke all on function public.confirm_driver_password_reset(uuid, text, text) from public;
-grant execute on function public.confirm_driver_password_reset(uuid, text, text) to anon, authenticated;
-revoke all on function public.admin_issue_driver_password_reset(uuid) from public;
-grant execute on function public.admin_issue_driver_password_reset(uuid) to authenticated;
-revoke all on function public.admin_cancel_driver_password_reset(uuid) from public;
-grant execute on function public.admin_cancel_driver_password_reset(uuid) to authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;
@@ -1049,9 +859,6 @@ begin
   end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'driver_profiles') then
     alter publication supabase_realtime add table public.driver_profiles;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'driver_password_reset_requests') then
-    alter publication supabase_realtime add table public.driver_password_reset_requests;
   end if;
 end $$;
 

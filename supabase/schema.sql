@@ -384,6 +384,14 @@ create table if not exists public.driver_registration_drafts (
   updated_at timestamptz not null default now()
 );
 
+create extension if not exists pgcrypto with schema extensions;
+
+create table if not exists public.driver_password_recovery_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  last_reset_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.clear_submitted_driver_draft()
 returns trigger
 language plpgsql
@@ -683,6 +691,115 @@ begin
 end;
 $$;
 
+create or replace function public.driver_password_reset_availability()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  recovery_user auth.users%rowtype;
+  verified_digits text;
+  target_user_id uuid;
+  last_reset timestamptz;
+  retry_at timestamptz;
+begin
+  select * into recovery_user from auth.users where id = auth.uid();
+  verified_digits := regexp_replace(coalesce(recovery_user.phone, ''), '[^0-9]', '', 'g');
+  if recovery_user.id is null or recovery_user.phone_confirmed_at is null or char_length(verified_digits) < 8 then
+    return jsonb_build_object('ok', false, 'message', 'Verify your phone number first.');
+  end if;
+
+  select u.id into target_user_id
+  from auth.users u
+  left join public.driver_profiles p on p.user_id = u.id
+  where u.id <> recovery_user.id
+    and (
+      regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = verified_digits
+      or lower(u.email) = lower(verified_digits || '@phone.nakolive.co.bw')
+    )
+  order by (p.user_id is not null) desc, u.created_at desc
+  limit 1;
+
+  if target_user_id is null then
+    return jsonb_build_object('ok', false, 'message', 'No driver account is linked to this verified phone number.');
+  end if;
+
+  select last_reset_at into last_reset
+  from public.driver_password_recovery_state
+  where user_id = target_user_id;
+  retry_at := last_reset + interval '14 days';
+
+  if last_reset is not null and retry_at > now() then
+    return jsonb_build_object('ok', true, 'available', false, 'retry_at', retry_at);
+  end if;
+  return jsonb_build_object('ok', true, 'available', true);
+end;
+$$;
+
+create or replace function public.reset_driver_password_with_verified_phone(p_new_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  recovery_user auth.users%rowtype;
+  verified_digits text;
+  target_user_id uuid;
+  last_reset timestamptz;
+  retry_at timestamptz;
+begin
+  if char_length(p_new_password) < 10 or char_length(p_new_password) > 72
+     or p_new_password !~ '[a-z]' or p_new_password !~ '[A-Z]'
+     or p_new_password !~ '[0-9]' or p_new_password !~ '[^A-Za-z0-9]' then
+    return jsonb_build_object('ok', false, 'message', 'Use 10–72 characters with uppercase, lowercase, a number and a symbol.');
+  end if;
+
+  select * into recovery_user from auth.users where id = auth.uid();
+  verified_digits := regexp_replace(coalesce(recovery_user.phone, ''), '[^0-9]', '', 'g');
+  if recovery_user.id is null or recovery_user.phone_confirmed_at is null or char_length(verified_digits) < 8 then
+    return jsonb_build_object('ok', false, 'message', 'Verify your phone number first.');
+  end if;
+
+  select u.id into target_user_id
+  from auth.users u
+  left join public.driver_profiles p on p.user_id = u.id
+  where u.id <> recovery_user.id
+    and (
+      regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = verified_digits
+      or lower(u.email) = lower(verified_digits || '@phone.nakolive.co.bw')
+    )
+  order by (p.user_id is not null) desc, u.created_at desc
+  limit 1;
+
+  if target_user_id is null then
+    return jsonb_build_object('ok', false, 'message', 'No driver account is linked to this verified phone number.');
+  end if;
+
+  select last_reset_at into last_reset
+  from public.driver_password_recovery_state
+  where user_id = target_user_id
+  for update;
+  retry_at := last_reset + interval '14 days';
+  if last_reset is not null and retry_at > now() then
+    return jsonb_build_object('ok', false, 'message', 'Password recovery is cooling down.', 'retry_at', retry_at);
+  end if;
+
+  update auth.users
+  set encrypted_password = crypt(p_new_password, gen_salt('bf')), updated_at = now()
+  where id = target_user_id;
+  delete from auth.sessions where user_id = target_user_id;
+
+  insert into public.driver_password_recovery_state (user_id, last_reset_at, updated_at)
+  values (target_user_id, now(), now())
+  on conflict (user_id) do update
+  set last_reset_at = excluded.last_reset_at, updated_at = now();
+
+  return jsonb_build_object('ok', true, 'retry_at', now() + interval '14 days');
+end;
+$$;
+
 create or replace function public.review_driver(p_driver_id uuid, p_status text, p_message text default null)
 returns void language plpgsql security definer set search_path = public
 as $$
@@ -808,6 +925,7 @@ $$;
 alter table public.driver_profiles enable row level security;
 alter table public.driver_locations enable row level security;
 alter table public.driver_registration_drafts enable row level security;
+alter table public.driver_password_recovery_state enable row level security;
 
 drop policy if exists driver_profiles_own_select on public.driver_profiles;
 create policy driver_profiles_own_select on public.driver_profiles for select to authenticated
@@ -841,6 +959,10 @@ revoke all on function public.update_driver_routes(text[]) from public;
 grant execute on function public.update_driver_routes(text[]) to authenticated;
 revoke all on function public.submit_driver_profile(text, text, text, text, text, text[]) from public;
 grant execute on function public.submit_driver_profile(text, text, text, text, text, text[]) to authenticated;
+revoke all on function public.driver_password_reset_availability() from public;
+grant execute on function public.driver_password_reset_availability() to authenticated;
+revoke all on function public.reset_driver_password_with_verified_phone(text) from public;
+grant execute on function public.reset_driver_password_with_verified_phone(text) to authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;

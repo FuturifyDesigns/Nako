@@ -204,6 +204,10 @@ async function boot() {
     const refreshed = await db.auth.refreshSession();
     if (refreshed.data?.session) data = refreshed.data;
   }
+  if (data.session?.user?.phone && !data.session.user.email) {
+    await db.auth.signOut({ scope: "local" });
+    data = { session: null };
+  }
   // Older builds stored staff and driver authentication in the same slot.
   // Never mistake a restored administrator session for a new driver.
   if (data.session?.user?.app_metadata?.role === "admin") {
@@ -267,13 +271,15 @@ function renderAuth() {
   ]);
   const message = el("p", { class: "form-error", hidden: true });
   const button = el("button", { class: "find", type: "submit", text: "Continue" });
+  const forgotPassword = el("button", { type: "button", class: "text-button auth-recovery-link", text: "Forgot password?" });
+  forgotPassword.addEventListener("click", renderPasswordRecovery);
   const privacyNote = el("p", { class: "privacy-hint" }, [
     "By creating an account, you acknowledge the ",
     el("a", { href: "../privacy/", text: "Privacy & data protection notice" }),
     "."
   ]);
   const identifierField = el("label", { class: "field-label auth-field" }, [identifierLabel, identifier]);
-  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), identifierField, field("Password", passwordInput), strength, privacyNote, message, button]);
+  const form = el("form", { class: "stack auth-form" }, [field("What would you like to do?", mode), identifierField, field("Password", passwordInput), strength, privacyNote, message, button, forgotPassword]);
 
   function passwordScore(value) {
     if (!value) return 0;
@@ -307,6 +313,7 @@ function renderAuth() {
     password.autocomplete = registering ? "new-password" : "current-password";
     password.minLength = registering ? 10 : 8;
     password.placeholder = registering ? "Create a strong password" : "Enter your password";
+    forgotPassword.hidden = registering;
     updateStrength();
   }
 
@@ -382,6 +389,179 @@ function renderAuth() {
     el("h1", { text: "Register and share your location" }),
     el("p", { class: "lede", text: "Approved taxi, kombi and bus drivers can appear on the passenger map while location sharing is on." }), form
   ]));
+}
+
+function recoveryShell(title, copy, content) {
+  clear(root);
+  root.append(el("section", { class: "card admin-card driver-card" }, [
+    brand(), el("p", { class: "eyebrow", text: "SECURE ACCOUNT RECOVERY" }),
+    el("h1", { text: title }), el("p", { class: "lede", text: copy }), content
+  ]));
+}
+
+function renderPasswordRecovery() {
+  const phone = el("input", { type: "tel", required: "true", inputmode: "tel", autocomplete: "tel", maxlength: "30", value: "+267", placeholder: "+267 71 234 567" });
+  const message = el("p", { class: "form-error", hidden: true, role: "status" });
+  const submit = el("button", { type: "submit", class: "find", text: "Send SMS code" });
+  const form = el("form", { class: "stack auth-form" }, [
+    el("label", { class: "field-label auth-field" }, [el("span", { text: "Registered phone number" }), phone]),
+    el("p", { class: "privacy-hint", text: "We will send a one-time verification code to this number. SMS delivery and abuse limits apply." }),
+    message, submit,
+    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
+  ]);
+  recoveryShell("Forgot your password?", "Verify your registered phone number, then choose a new password.", form);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const normalized = normalizePhone(phone.value);
+    phone.setCustomValidity(normalized ? "" : "Enter a valid Botswana phone number.");
+    if (!form.reportValidity()) return;
+    submit.disabled = true;
+    submit.textContent = "Sending code…";
+    message.hidden = true;
+    const result = await withTimeout(
+      db.auth.signInWithOtp({ phone: normalized, options: { shouldCreateUser: true } }),
+      15000,
+      "The SMS request took too long. Check your connection and try again."
+    ).catch((error) => ({ error }));
+    submit.disabled = false;
+    submit.textContent = "Send SMS code";
+    if (result.error) {
+      message.textContent = result.error.message || "The SMS code could not be sent.";
+      message.hidden = false;
+      return;
+    }
+    renderRecoveryOtp(normalized);
+  });
+}
+
+function renderRecoveryOtp(phone) {
+  const code = el("input", { required: "true", minlength: "6", maxlength: "8", pattern: "[0-9]{6,8}", inputmode: "numeric", autocomplete: "one-time-code", placeholder: "SMS verification code" });
+  const message = el("p", { class: "form-error", hidden: true, role: "status" });
+  const submit = el("button", { type: "submit", class: "find", text: "Verify code" });
+  const resend = el("button", { type: "button", class: "text-button auth-recovery-link", text: "Send another code" });
+  resend.addEventListener("click", renderPasswordRecovery);
+  const form = el("form", { class: "stack auth-form" }, [
+    el("div", { class: "status-panel pending" }, [el("strong", { text: "Code sent" }), el("p", { text: `Enter the SMS code sent to ${phone}.` })]),
+    el("label", { class: "field-label auth-field" }, [el("span", { text: "Verification code" }), code]),
+    message, submit, resend,
+    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
+  ]);
+  recoveryShell("Check your phone", "The code confirms that this driver phone number belongs to you.", form);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    submit.disabled = true;
+    submit.textContent = "Verifying…";
+    message.hidden = true;
+    const verified = await withTimeout(db.auth.verifyOtp({ phone, token: code.value.trim(), type: "sms" }), 15000, "Verification took too long. Try again.")
+      .catch((error) => ({ error }));
+    if (verified.error || !verified.data?.session) {
+      submit.disabled = false;
+      submit.textContent = "Verify code";
+      message.textContent = verified.error?.message || "That code is invalid or expired.";
+      message.hidden = false;
+      return;
+    }
+    driverSession = verified.data.session;
+    const { data, error } = await db.rpc("driver_password_reset_availability");
+    if (error || !data?.ok) {
+      await db.auth.signOut();
+      driverSession = null;
+      message.textContent = data?.message || error?.message || "This phone number is not linked to a driver account.";
+      message.hidden = false;
+      submit.disabled = false;
+      submit.textContent = "Verify code";
+      return;
+    }
+    if (!data.available) {
+      renderRecoveryCooldown(data.retry_at);
+      return;
+    }
+    renderRecoveryNewPassword();
+  });
+}
+
+function renderRecoveryCooldown(retryAt) {
+  const timer = el("strong", { class: "recovery-countdown" });
+  const update = () => {
+    const remaining = Math.max(0, new Date(retryAt).getTime() - Date.now());
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    timer.textContent = `${days}d ${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+    if (remaining <= 0) renderRecoveryNewPassword();
+  };
+  update();
+  const interval = window.setInterval(() => {
+    if (!document.body.contains(timer)) { window.clearInterval(interval); return; }
+    update();
+  }, 1000);
+  const content = el("div", { class: "stack auth-form" }, [
+    el("div", { class: "status-panel pending" }, [el("strong", { text: "Password reset cooling down" }), el("p", { text: "For account safety, this phone number can reset its driver password once every two weeks." })]),
+    timer,
+    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: async () => { await db.auth.signOut(); driverSession = null; renderAuth(); }, text: "Back to driver login" })
+  ]);
+  recoveryShell("Reset not available yet", "You can create another password when this timer reaches zero.", content);
+}
+
+function renderRecoveryNewPassword() {
+  const password = el("input", { type: "password", required: "true", minlength: "10", maxlength: "72", autocomplete: "new-password", placeholder: "Create a strong password" });
+  const confirm = el("input", { type: "password", required: "true", minlength: "10", maxlength: "72", autocomplete: "new-password", placeholder: "Repeat the new password" });
+  const toggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
+  const passwordWrap = el("div", { class: "password-input-wrap" }, [password, toggle]);
+  const strengthLabel = el("span", { class: "strength-label" });
+  const strength = el("div", { class: "password-strength", hidden: true, role: "status" }, [
+    el("div", { class: "strength-row" }, [el("strong", { text: "Password strength" }), strengthLabel]),
+    el("div", { class: "strength-bars", "aria-hidden": "true" }, [0, 1, 2, 3, 4].map(() => el("span"))),
+    el("small", { text: "Use 10+ characters with uppercase, lowercase, a number and a symbol." })
+  ]);
+  const message = el("p", { class: "form-error", hidden: true, role: "status" });
+  const submit = el("button", { type: "submit", class: "find", text: "Set new password" });
+  function validate() {
+    const value = password.value;
+    const score = [value.length >= 10, /[a-z]/.test(value) && /[A-Z]/.test(value), /\d/.test(value), /[^A-Za-z0-9]/.test(value), value.length >= 14].filter(Boolean).length;
+    strength.hidden = !value;
+    strength.dataset.score = String(score);
+    strengthLabel.textContent = ["Very weak", "Weak", "Fair", "Good", "Strong", "Very strong"][score];
+    password.setCustomValidity(value && score < 4 ? "Use uppercase, lowercase, a number and a symbol." : "");
+    confirm.setCustomValidity(confirm.value && confirm.value !== value ? "Passwords do not match." : "");
+  }
+  password.addEventListener("input", validate);
+  confirm.addEventListener("input", validate);
+  toggle.addEventListener("click", () => {
+    const showing = password.type === "text";
+    password.type = showing ? "password" : "text";
+    confirm.type = showing ? "password" : "text";
+    toggle.textContent = showing ? "Show" : "Hide";
+    toggle.setAttribute("aria-pressed", showing ? "false" : "true");
+  });
+  const form = el("form", { class: "stack auth-form" }, [
+    el("label", { class: "field-label auth-field" }, [el("span", { text: "New password" }), passwordWrap]), strength,
+    el("label", { class: "field-label auth-field" }, [el("span", { text: "Confirm new password" }), confirm]),
+    message, submit
+  ]);
+  recoveryShell("Create a new password", "Your phone number is verified. After this reset, another reset will be available in two weeks.", form);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    validate();
+    if (!form.reportValidity()) return;
+    submit.disabled = true;
+    submit.textContent = "Updating password…";
+    const { data, error } = await db.rpc("reset_driver_password_with_verified_phone", { p_new_password: password.value });
+    if (error || !data?.ok) {
+      submit.disabled = false;
+      submit.textContent = "Set new password";
+      if (data?.retry_at) { renderRecoveryCooldown(data.retry_at); return; }
+      message.textContent = data?.message || error?.message || "The password could not be updated.";
+      message.hidden = false;
+      return;
+    }
+    await db.auth.signOut();
+    driverSession = null;
+    renderAuth();
+    notify("Password updated. Sign in with your new password.");
+  });
 }
 
 async function renderDriver(user) {

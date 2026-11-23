@@ -24,6 +24,7 @@ const SHARING_KEY = "nakolive-driver-sharing-v1";
 const QUEUED_LOCATION_KEY = "nakolive-queued-driver-location-v1";
 const DRAFT_KEY_PREFIX = "nakolive-driver-draft-v1:";
 const PROFILE_CACHE_PREFIX = "nakolive-driver-profile-v1:";
+const RECOVERY_DEVICE_KEY = "nakolive-driver-recovery-device-v1";
 let authWatcher = null;
 let driverSession = null;
 
@@ -181,6 +182,21 @@ async function saveRegistrationDraft(userId, draft) {
 async function clearRegistrationDraft(userId) {
   localStorage.removeItem(localDraftKey(userId));
   if (navigator.onLine) await db.from("driver_registration_drafts").delete().eq("user_id", userId);
+}
+
+function recoveryDeviceToken(create = false) {
+  let token = localStorage.getItem(RECOVERY_DEVICE_KEY);
+  if (!token && create) {
+    token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+    localStorage.setItem(RECOVERY_DEVICE_KEY, token);
+  }
+  return token;
+}
+
+async function ensureRecoveryDevice() {
+  const token = recoveryDeviceToken(true);
+  const { error } = await db.rpc("register_driver_recovery_device", { p_device_token: token });
+  if (error) throw error;
 }
 
 async function boot() {
@@ -400,85 +416,7 @@ function recoveryShell(title, copy, content) {
 }
 
 function renderPasswordRecovery() {
-  const phone = el("input", { type: "tel", required: "true", inputmode: "tel", autocomplete: "tel", maxlength: "30", value: "+267", placeholder: "+267 71 234 567" });
-  const message = el("p", { class: "form-error", hidden: true, role: "status" });
-  const submit = el("button", { type: "submit", class: "find", text: "Send SMS code" });
-  const form = el("form", { class: "stack auth-form" }, [
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "Registered phone number" }), phone]),
-    el("p", { class: "privacy-hint", text: "We will send a one-time verification code to this number. SMS delivery and abuse limits apply." }),
-    message, submit,
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
-  ]);
-  recoveryShell("Forgot your password?", "Verify your registered phone number, then choose a new password.", form);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const normalized = normalizePhone(phone.value);
-    phone.setCustomValidity(normalized ? "" : "Enter a valid Botswana phone number.");
-    if (!form.reportValidity()) return;
-    submit.disabled = true;
-    submit.textContent = "Sending code…";
-    message.hidden = true;
-    const result = await withTimeout(
-      db.auth.signInWithOtp({ phone: normalized, options: { shouldCreateUser: true } }),
-      15000,
-      "The SMS request took too long. Check your connection and try again."
-    ).catch((error) => ({ error }));
-    submit.disabled = false;
-    submit.textContent = "Send SMS code";
-    if (result.error) {
-      message.textContent = result.error.message || "The SMS code could not be sent.";
-      message.hidden = false;
-      return;
-    }
-    renderRecoveryOtp(normalized);
-  });
-}
-
-function renderRecoveryOtp(phone) {
-  const code = el("input", { required: "true", minlength: "6", maxlength: "8", pattern: "[0-9]{6,8}", inputmode: "numeric", autocomplete: "one-time-code", placeholder: "SMS verification code" });
-  const message = el("p", { class: "form-error", hidden: true, role: "status" });
-  const submit = el("button", { type: "submit", class: "find", text: "Verify code" });
-  const resend = el("button", { type: "button", class: "text-button auth-recovery-link", text: "Send another code" });
-  resend.addEventListener("click", renderPasswordRecovery);
-  const form = el("form", { class: "stack auth-form" }, [
-    el("div", { class: "status-panel pending" }, [el("strong", { text: "Code sent" }), el("p", { text: `Enter the SMS code sent to ${phone}.` })]),
-    el("label", { class: "field-label auth-field" }, [el("span", { text: "Verification code" }), code]),
-    message, submit, resend,
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
-  ]);
-  recoveryShell("Check your phone", "The code confirms that this driver phone number belongs to you.", form);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!form.reportValidity()) return;
-    submit.disabled = true;
-    submit.textContent = "Verifying…";
-    message.hidden = true;
-    const verified = await withTimeout(db.auth.verifyOtp({ phone, token: code.value.trim(), type: "sms" }), 15000, "Verification took too long. Try again.")
-      .catch((error) => ({ error }));
-    if (verified.error || !verified.data?.session) {
-      submit.disabled = false;
-      submit.textContent = "Verify code";
-      message.textContent = verified.error?.message || "That code is invalid or expired.";
-      message.hidden = false;
-      return;
-    }
-    driverSession = verified.data.session;
-    const { data, error } = await db.rpc("driver_password_reset_availability");
-    if (error || !data?.ok) {
-      await db.auth.signOut();
-      driverSession = null;
-      message.textContent = data?.message || error?.message || "This phone number is not linked to a driver account.";
-      message.hidden = false;
-      submit.disabled = false;
-      submit.textContent = "Verify code";
-      return;
-    }
-    if (!data.available) {
-      renderRecoveryCooldown(data.retry_at);
-      return;
-    }
-    renderRecoveryNewPassword();
-  });
+  renderRecoveryNewPassword();
 }
 
 function renderRecoveryCooldown(retryAt) {
@@ -490,7 +428,7 @@ function renderRecoveryCooldown(retryAt) {
     const minutes = Math.floor((remaining % 3600000) / 60000);
     const seconds = Math.floor((remaining % 60000) / 1000);
     timer.textContent = `${days}d ${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
-    if (remaining <= 0) renderRecoveryNewPassword();
+    if (remaining <= 0) renderPasswordRecovery();
   };
   update();
   const interval = window.setInterval(() => {
@@ -500,12 +438,13 @@ function renderRecoveryCooldown(retryAt) {
   const content = el("div", { class: "stack auth-form" }, [
     el("div", { class: "status-panel pending" }, [el("strong", { text: "Password reset cooling down" }), el("p", { text: "For account safety, this phone number can reset its driver password once every two weeks." })]),
     timer,
-    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: async () => { await db.auth.signOut(); driverSession = null; renderAuth(); }, text: "Back to driver login" })
+    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
   ]);
   recoveryShell("Reset not available yet", "You can create another password when this timer reaches zero.", content);
 }
 
 function renderRecoveryNewPassword() {
+  const phone = el("input", { type: "tel", required: "true", inputmode: "tel", autocomplete: "tel", maxlength: "30", value: "+267", placeholder: "+267 71 234 567" });
   const password = el("input", { type: "password", required: "true", minlength: "10", maxlength: "72", autocomplete: "new-password", placeholder: "Create a strong password" });
   const confirm = el("input", { type: "password", required: "true", minlength: "10", maxlength: "72", autocomplete: "new-password", placeholder: "Repeat the new password" });
   const toggle = el("button", { type: "button", class: "password-toggle", "aria-pressed": "false", text: "Show" });
@@ -537,18 +476,33 @@ function renderRecoveryNewPassword() {
     toggle.setAttribute("aria-pressed", showing ? "false" : "true");
   });
   const form = el("form", { class: "stack auth-form" }, [
+    el("label", { class: "field-label auth-field" }, [el("span", { text: "Registered phone number" }), phone]),
     el("label", { class: "field-label auth-field" }, [el("span", { text: "New password" }), passwordWrap]), strength,
     el("label", { class: "field-label auth-field" }, [el("span", { text: "Confirm new password" }), confirm]),
-    message, submit
+    el("p", { class: "privacy-hint", text: "For safety, recovery works only on a phone that previously signed into this driver account." }),
+    message, submit,
+    el("button", { type: "button", class: "text-button auth-recovery-link", onclick: renderAuth, text: "Back to driver login" })
   ]);
-  recoveryShell("Create a new password", "Your phone number is verified. After this reset, another reset will be available in two weeks.", form);
+  recoveryShell("Create a new password", "Enter your registered phone number and choose a new password. No SMS is sent.", form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     validate();
+    const normalized = normalizePhone(phone.value);
+    phone.setCustomValidity(normalized ? "" : "Enter a valid Botswana phone number.");
     if (!form.reportValidity()) return;
+    const deviceToken = recoveryDeviceToken(false);
+    if (!deviceToken) {
+      message.textContent = "This phone has not yet been registered for recovery. Sign in once on this phone or ask the administrator for help.";
+      message.hidden = false;
+      return;
+    }
     submit.disabled = true;
     submit.textContent = "Updating password…";
-    const { data, error } = await db.rpc("reset_driver_password_with_verified_phone", { p_new_password: password.value });
+    const { data, error } = await db.rpc("reset_driver_password_from_registered_device", {
+      p_phone: normalized,
+      p_device_token: deviceToken,
+      p_new_password: password.value
+    });
     if (error || !data?.ok) {
       submit.disabled = false;
       submit.textContent = "Set new password";
@@ -557,8 +511,6 @@ function renderRecoveryNewPassword() {
       message.hidden = false;
       return;
     }
-    await db.auth.signOut();
-    driverSession = null;
     renderAuth();
     notify("Password updated. Sign in with your new password.");
   });
@@ -587,6 +539,7 @@ async function renderDriver(user) {
     if (verified.data?.user) user = verified.data.user;
   }
   const profile = await profileFor(user.id);
+  if (profile) ensureRecoveryDevice().catch(() => {});
   if (!profile) renderRegistration(user, null, await registrationDraftFor(user.id));
   else if (profile.status === "rejected") renderRegistration(user, profile);
   else if (profile.status === "pending") renderPending(user, profile);
@@ -878,6 +831,7 @@ function renderRegistration(user, existing, savedDraft = null, accountSetup = fa
         vehicle_description: vehicle.value.trim(), plate: plate.value.trim().toUpperCase(), route_ids: resolvedRoutes.ids, status: "pending"
       };
       localStorage.setItem(`${PROFILE_CACHE_PREFIX}${activeUser.id}`, JSON.stringify(row));
+      ensureRecoveryDevice().catch(() => {});
       localStorage.removeItem(localDraftKey(draftOwner));
       clearRegistrationDraft(activeUser.id).catch(() => {});
       const cleanUrl = new URL(location.href);

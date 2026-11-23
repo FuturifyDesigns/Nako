@@ -392,6 +392,16 @@ create table if not exists public.driver_password_recovery_state (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.driver_recovery_devices (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  token_hash text not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  unique (user_id, token_hash)
+);
+
 create or replace function public.clear_submitted_driver_draft()
 returns trigger
 language plpgsql
@@ -691,62 +701,43 @@ begin
 end;
 $$;
 
-create or replace function public.driver_password_reset_availability()
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  recovery_user auth.users%rowtype;
-  verified_digits text;
-  target_user_id uuid;
-  last_reset timestamptz;
-  retry_at timestamptz;
-begin
-  select * into recovery_user from auth.users where id = auth.uid();
-  verified_digits := regexp_replace(coalesce(recovery_user.phone, ''), '[^0-9]', '', 'g');
-  if recovery_user.id is null or recovery_user.phone_confirmed_at is null or char_length(verified_digits) < 8 then
-    return jsonb_build_object('ok', false, 'message', 'Verify your phone number first.');
-  end if;
+drop function if exists public.driver_password_reset_availability();
+drop function if exists public.reset_driver_password_with_verified_phone(text);
 
-  select u.id into target_user_id
-  from auth.users u
-  left join public.driver_profiles p on p.user_id = u.id
-  where u.id <> recovery_user.id
-    and (
-      regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = verified_digits
-      or lower(u.email) = lower(verified_digits || '@phone.nakolive.co.bw')
-    )
-  order by (p.user_id is not null) desc, u.created_at desc
-  limit 1;
-
-  if target_user_id is null then
-    return jsonb_build_object('ok', false, 'message', 'No driver account is linked to this verified phone number.');
-  end if;
-
-  select last_reset_at into last_reset
-  from public.driver_password_recovery_state
-  where user_id = target_user_id;
-  retry_at := last_reset + interval '14 days';
-
-  if last_reset is not null and retry_at > now() then
-    return jsonb_build_object('ok', true, 'available', false, 'retry_at', retry_at);
-  end if;
-  return jsonb_build_object('ok', true, 'available', true);
-end;
-$$;
-
-create or replace function public.reset_driver_password_with_verified_phone(p_new_password text)
+create or replace function public.register_driver_recovery_device(p_device_token text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions
 as $$
 declare
-  recovery_user auth.users%rowtype;
-  verified_digits text;
+  clean_hash text;
+begin
+  if auth.uid() is null then raise exception 'sign in required'; end if;
+  if char_length(coalesce(p_device_token, '')) < 32 then raise exception 'invalid recovery device'; end if;
+  if not exists (select 1 from public.driver_profiles where user_id = auth.uid()) then raise exception 'driver profile required'; end if;
+  clean_hash := encode(digest(p_device_token, 'sha256'), 'hex');
+  insert into public.driver_recovery_devices (user_id, token_hash)
+  values (auth.uid(), clean_hash)
+  on conflict (user_id, token_hash) do update set revoked_at = null;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.reset_driver_password_from_registered_device(
+  p_phone text,
+  p_device_token text,
+  p_new_password text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  digits text := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
   target_user_id uuid;
+  device_id uuid;
+  supplied_hash text;
   last_reset timestamptz;
   retry_at timestamptz;
 begin
@@ -755,26 +746,29 @@ begin
      or p_new_password !~ '[0-9]' or p_new_password !~ '[^A-Za-z0-9]' then
     return jsonb_build_object('ok', false, 'message', 'Use 10–72 characters with uppercase, lowercase, a number and a symbol.');
   end if;
-
-  select * into recovery_user from auth.users where id = auth.uid();
-  verified_digits := regexp_replace(coalesce(recovery_user.phone, ''), '[^0-9]', '', 'g');
-  if recovery_user.id is null or recovery_user.phone_confirmed_at is null or char_length(verified_digits) < 8 then
-    return jsonb_build_object('ok', false, 'message', 'Verify your phone number first.');
+  if char_length(coalesce(p_device_token, '')) < 32 then
+    return jsonb_build_object('ok', false, 'message', 'This phone is not registered for password recovery. Sign in once on this phone or contact the administrator.');
   end if;
 
-  select u.id into target_user_id
+  if digits like '00%' then digits := substring(digits from 3); end if;
+  if digits like '0%' and char_length(digits) = 9 then digits := '267' || substring(digits from 2); end if;
+  if char_length(digits) = 8 then digits := '267' || digits; end if;
+  supplied_hash := encode(digest(p_device_token, 'sha256'), 'hex');
+
+  select u.id, d.id into target_user_id, device_id
   from auth.users u
+  join public.driver_recovery_devices d on d.user_id = u.id
   left join public.driver_profiles p on p.user_id = u.id
-  where u.id <> recovery_user.id
+  where d.token_hash = supplied_hash and d.revoked_at is null
     and (
-      regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = verified_digits
-      or lower(u.email) = lower(verified_digits || '@phone.nakolive.co.bw')
+      regexp_replace(coalesce(u.raw_user_meta_data ->> 'phone', ''), '[^0-9]', '', 'g') = digits
+      or lower(u.email) = lower(digits || '@phone.nakolive.co.bw')
     )
   order by (p.user_id is not null) desc, u.created_at desc
   limit 1;
 
   if target_user_id is null then
-    return jsonb_build_object('ok', false, 'message', 'No driver account is linked to this verified phone number.');
+    return jsonb_build_object('ok', false, 'message', 'This phone is not registered for password recovery. Sign in once on this phone or contact the administrator.');
   end if;
 
   select last_reset_at into last_reset
@@ -790,6 +784,7 @@ begin
   set encrypted_password = crypt(p_new_password, gen_salt('bf')), updated_at = now()
   where id = target_user_id;
   delete from auth.sessions where user_id = target_user_id;
+  update public.driver_recovery_devices set last_used_at = now() where id = device_id;
 
   insert into public.driver_password_recovery_state (user_id, last_reset_at, updated_at)
   values (target_user_id, now(), now())
@@ -926,6 +921,7 @@ alter table public.driver_profiles enable row level security;
 alter table public.driver_locations enable row level security;
 alter table public.driver_registration_drafts enable row level security;
 alter table public.driver_password_recovery_state enable row level security;
+alter table public.driver_recovery_devices enable row level security;
 
 drop policy if exists driver_profiles_own_select on public.driver_profiles;
 create policy driver_profiles_own_select on public.driver_profiles for select to authenticated
@@ -959,10 +955,10 @@ revoke all on function public.update_driver_routes(text[]) from public;
 grant execute on function public.update_driver_routes(text[]) to authenticated;
 revoke all on function public.submit_driver_profile(text, text, text, text, text, text[]) from public;
 grant execute on function public.submit_driver_profile(text, text, text, text, text, text[]) to authenticated;
-revoke all on function public.driver_password_reset_availability() from public;
-grant execute on function public.driver_password_reset_availability() to authenticated;
-revoke all on function public.reset_driver_password_with_verified_phone(text) from public;
-grant execute on function public.reset_driver_password_with_verified_phone(text) to authenticated;
+revoke all on function public.register_driver_recovery_device(text) from public;
+grant execute on function public.register_driver_recovery_device(text) to authenticated;
+revoke all on function public.reset_driver_password_from_registered_device(text, text, text) from public;
+grant execute on function public.reset_driver_password_from_registered_device(text, text, text) to anon, authenticated;
 revoke all on function public.review_driver(uuid, text, text) from public;
 grant execute on function public.review_driver(uuid, text, text) to authenticated;
 revoke all on function public.moderate_driver(uuid, text, text) from public;

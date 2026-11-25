@@ -1,3 +1,5 @@
+import { vehicleBearing, CAR_PATH, VEHICLE_COLORS } from "./vehicle-heading.js";
+
 const ASSETS = {
   taxi: "../assets/vehicles/taxi-mark.png?v=5",
   kombi: "../assets/vehicles/kombi-mark.png?v=5",
@@ -29,6 +31,7 @@ function toFeatureCollection(vehicles, selected, highlightedRoute) {
         properties: {
           id: vehicle.id,
           icon: iconId(type),
+          bearing: vehicle.bearing || 0,
           selected: vehicle.id === selected ? 1 : 0,
           routeMatch: highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute) ? 1 : 0
         },
@@ -64,7 +67,8 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
       const id = iconId(type);
       if (map.hasImage(id)) continue;
       try {
-        const image = await loadImage(map, url);
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="-20 -20 40 40"><path d="${CAR_PATH}" fill="${VEHICLE_COLORS[type]}" fill-rule="evenodd" stroke="#102b46" stroke-width="1.5"/></svg>`;
+        const image = await loadImage(map, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
         if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 2 });
       } catch (error) {
         console.warn("NakoLive vehicle icon failed to load", type, error);
@@ -112,7 +116,8 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
           "icon-pitch-alignment": "viewport",
-          "icon-rotation-alignment": "viewport"
+          "icon-rotation-alignment": "map",
+          "icon-rotate": ["get", "bearing"]
         },
         paint: {
           "icon-opacity": ["case", ["any", ["==", ["get", "selected"], 1], ["==", ["get", "routeMatch"], 1]], 1, 0.34]
@@ -143,7 +148,8 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
 
   return {
     async setVehicles(next) {
-      const target = next || [];
+      const previousDirections = new Map(targetVehicles.map((vehicle) => [vehicle.id, vehicle]));
+      const target = (next || []).map((vehicle) => ({ ...vehicle, bearing: vehicleBearing(vehicle, previousDirections.get(vehicle.id)) }));
       targetVehicles = target;
       await ready;
       if (animationFrame) cancelAnimationFrame(animationFrame);

@@ -1,4 +1,4 @@
-const CACHE = "nakolive-shell-2026-11-23-62";
+const CACHE = "nakolive-shell-2026-11-25-63";
 const TILES = "nako-tiles-1";
 const PRECACHE = [
   "./",
@@ -55,6 +55,7 @@ const PRECACHE = [
   "./src/js/passenger.js",
   "./src/js/live-vehicles.js",
   "./src/js/google-map.js",
+  "./src/js/vehicle-heading.js",
   "./src/js/sync.js",
   "./src/js/install.js",
   "./src/js/config.js",

@@ -128,6 +128,7 @@ function updateDriverMapPosition(point, motionState = "idle", sampledAt = new Da
     routeIds: current.profile.route_ids || [],
     lat: Number(point.lat),
     lng: Number(point.lng),
+    bearing: point.heading == null ? null : Number(point.heading),
     state: motionState === "moving" ? "moving" : "idle"
   };
   current.latest = vehicle;
@@ -153,7 +154,7 @@ async function mountDriverMap(user, profile, canvas, message, state, detail) {
   }
   try {
     const { data: saved } = await db.from("driver_locations")
-      .select("driver_id,transport_type,plate,route_ids,lat,lng,accuracy,motion_state,sampled_at")
+      .select("driver_id,transport_type,plate,route_ids,lat,lng,accuracy,heading,motion_state,sampled_at")
       .eq("driver_id", user.id).maybeSingle();
     const center = saved ? { lat: Number(saved.lat), lng: Number(saved.lng) } : { lat: -24.6282, lng: 25.9231 };
     const map = await createGoogleMap(canvas, { center, zoom: saved ? 16 : 12 });
@@ -1213,7 +1214,8 @@ function startSharing(status, detail, button) {
     updateDriverMapPosition({
       lat: position.coords.latitude,
       lng: position.coords.longitude,
-      accuracy: position.coords.accuracy
+      accuracy: position.coords.accuracy,
+      heading: position.coords.heading
     }, publishedState, new Date(position.timestamp).toISOString());
     status.textContent = publishedState === "moving" ? "On the move" : "Idle";
     detail.textContent = `Location on · accuracy about ${Math.round(position.coords.accuracy)} m · updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;

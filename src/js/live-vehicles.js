@@ -26,7 +26,7 @@ function normalize(row, point) {
     lat: Number(row.lat),
     lng: Number(row.lng),
     accuracy: Number(row.accuracy || 0),
-    bearing: Number(row.heading || 0),
+    bearing: row.heading == null ? null : Number(row.heading),
     sampledAt: row.sampled_at,
     state: row.motion_state === "moving" && Date.now() - sampled < MOTION_FRESH_MS ? "moving" : "idle"
   };

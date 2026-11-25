@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { vehicleBearing, CAR_PATH, VEHICLE_COLORS } from "./vehicle-heading.js";
 
 let loading;
 
@@ -161,7 +162,7 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
     for (const [id, marker] of markers) {
       if (!ids.has(id)) { marker.setMap(null); markers.delete(id); }
     }
-    for (const vehicle of vehicles) {
+    for (let vehicle of vehicles) {
       let marker = markers.get(vehicle.id);
       if (!marker) {
         marker = new globalThis.google.maps.Marker({
@@ -173,6 +174,14 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
         marker.addListener("click", () => onSelect?.(marker.nakoVehicle));
         markers.set(vehicle.id, marker);
       }
+      const bearing = vehicleBearing(vehicle, marker.nakoVehicle);
+      vehicle = { ...vehicle, bearing };
+      marker.setIcon({
+        path: CAR_PATH, rotation: bearing, scale: vehicle.type === "bus" ? 1.6 : 1.4,
+        fillColor: VEHICLE_COLORS[vehicle.type] || VEHICLE_COLORS.kombi,
+        fillOpacity: 1, strokeColor: "#102b46", strokeWeight: 1.8,
+        anchor: new globalThis.google.maps.Point(0, 0)
+      });
       marker.nakoVehicle = vehicle;
       moveMarker(marker, vehicle);
       const routeMatch = highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute);

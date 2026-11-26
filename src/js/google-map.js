@@ -118,9 +118,9 @@ export async function createGoogleMap(container, { center, zoom = 14 } = {}) {
 }
 
 const ICONS = {
-  taxi: "../assets/vehicles/taxi-mark.png?v=5",
-  kombi: "../assets/vehicles/kombi-mark.png?v=5",
-  bus: "../assets/vehicles/bus-mark.png?v=5"
+  taxi: "../assets/vehicles/taxi-direction.png?v=1",
+  kombi: "../assets/vehicles/kombi-direction.png?v=1",
+  bus: "../assets/vehicles/bus-direction.png?v=1"
 };
 
 export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
@@ -135,8 +135,8 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   }
   function vehicleIcon(type, bearing) {
     const image = images.get(type);
-    if (!image) return { url: ICONS[type] || ICONS.kombi, scaledSize: new google.maps.Size(54, 36), anchor: new google.maps.Point(27, 18) };
-    // Original artwork faces right (east). Quantize rotation to reuse a small
+    if (!image) return { url: ICONS[type] || ICONS.kombi, scaledSize: new google.maps.Size(56, 56), anchor: new google.maps.Point(28, 28) };
+    // Top-down artwork faces north. Quantize rotation to reuse a small
     // image cache instead of redrawing artwork on every location update.
     const angle = Math.round(bearing / 10) * 10 % 360;
     const key = `${type}:${angle}`;
@@ -145,8 +145,8 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
       canvas.width = canvas.height = 144;
       const context = canvas.getContext("2d");
       context.translate(72, 72);
-      context.rotate((angle - 90) * Math.PI / 180);
-      context.drawImage(image, -54, -36, 108, 72);
+      context.rotate(angle * Math.PI / 180);
+      context.drawImage(image, -56, -56, 112, 112);
       rotatedIcons.set(key, { url: canvas.toDataURL("image/png"), scaledSize: new google.maps.Size(72, 72), anchor: new google.maps.Point(36, 36) });
     }
     return rotatedIcons.get(key);
@@ -195,7 +195,7 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
           map: mapAdapter.native,
           title: `${vehicle.type} ${vehicle.plate}`,
           optimized: true,
-          icon: { url: ICONS[vehicle.type] || ICONS.kombi, scaledSize: new globalThis.google.maps.Size(54, 36), anchor: new globalThis.google.maps.Point(27, 18) }
+          icon: vehicleIcon(vehicle.type, vehicle.bearing || 0)
         });
         marker.addListener("click", () => onSelect?.(marker.nakoVehicle));
         markers.set(vehicle.id, marker);

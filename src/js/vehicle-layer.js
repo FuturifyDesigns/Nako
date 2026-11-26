@@ -1,9 +1,9 @@
 import { vehicleBearing } from "./vehicle-heading.js";
 
 const ASSETS = {
-  taxi: "../assets/vehicles/taxi-mark.png?v=5",
-  kombi: "../assets/vehicles/kombi-mark.png?v=5",
-  bus: "../assets/vehicles/bus-mark.png?v=5"
+  taxi: "../assets/vehicles/taxi-direction.png?v=1",
+  kombi: "../assets/vehicles/kombi-direction.png?v=1",
+  bus: "../assets/vehicles/bus-direction.png?v=1"
 };
 
 const SOURCE_ID = "nako-vehicles";
@@ -31,7 +31,7 @@ function toFeatureCollection(vehicles, selected, highlightedRoute) {
         properties: {
           id: vehicle.id,
           icon: iconId(type),
-          bearing: (vehicle.bearing || 0) - 90,
+          bearing: vehicle.bearing || 0,
           selected: vehicle.id === selected ? 1 : 0,
           routeMatch: highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute) ? 1 : 0
         },

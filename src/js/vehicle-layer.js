@@ -1,4 +1,4 @@
-import { vehicleBearing, CAR_PATH, VEHICLE_COLORS } from "./vehicle-heading.js";
+import { vehicleBearing } from "./vehicle-heading.js";
 
 const ASSETS = {
   taxi: "../assets/vehicles/taxi-mark.png?v=5",
@@ -31,7 +31,7 @@ function toFeatureCollection(vehicles, selected, highlightedRoute) {
         properties: {
           id: vehicle.id,
           icon: iconId(type),
-          bearing: vehicle.bearing || 0,
+          bearing: (vehicle.bearing || 0) - 90,
           selected: vehicle.id === selected ? 1 : 0,
           routeMatch: highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute) ? 1 : 0
         },
@@ -67,8 +67,7 @@ export function createVehicleLayer(map, _maplibregl, { onSelect } = {}) {
       const id = iconId(type);
       if (map.hasImage(id)) continue;
       try {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="-20 -20 40 40"><path d="${CAR_PATH}" fill="${VEHICLE_COLORS[type]}" fill-rule="evenodd" stroke="#102b46" stroke-width="1.5"/></svg>`;
-        const image = await loadImage(map, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+        const image = await loadImage(map, url);
         if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 2 });
       } catch (error) {
         console.warn("NakoLive vehicle icon failed to load", type, error);

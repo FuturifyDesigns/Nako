@@ -1,5 +1,5 @@
 import { config } from "./config.js";
-import { vehicleBearing, CAR_PATH, VEHICLE_COLORS } from "./vehicle-heading.js";
+import { vehicleBearing } from "./vehicle-heading.js";
 
 let loading;
 
@@ -125,6 +125,32 @@ const ICONS = {
 
 export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
   const markers = new Map();
+  const images = new Map();
+  const rotatedIcons = new Map();
+  let disposed = false;
+  for (const [type, url] of Object.entries(ICONS)) {
+    const image = new Image();
+    image.onload = () => { images.set(type, image); if (!disposed) sync(latest); };
+    image.src = url;
+  }
+  function vehicleIcon(type, bearing) {
+    const image = images.get(type);
+    if (!image) return { url: ICONS[type] || ICONS.kombi, scaledSize: new google.maps.Size(54, 36), anchor: new google.maps.Point(27, 18) };
+    // Original artwork faces right (east). Quantize rotation to reuse a small
+    // image cache instead of redrawing artwork on every location update.
+    const angle = Math.round(bearing / 10) * 10 % 360;
+    const key = `${type}:${angle}`;
+    if (!rotatedIcons.has(key)) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 144;
+      const context = canvas.getContext("2d");
+      context.translate(72, 72);
+      context.rotate((angle - 90) * Math.PI / 180);
+      context.drawImage(image, -54, -36, 108, 72);
+      rotatedIcons.set(key, { url: canvas.toDataURL("image/png"), scaledSize: new google.maps.Size(72, 72), anchor: new google.maps.Point(36, 36) });
+    }
+    return rotatedIcons.get(key);
+  }
   let selected = null;
   let highlightedRoute = "all";
   const zoomListener = globalThis.google.maps.event.addListener(mapAdapter.native, "zoom_changed", () => {
@@ -176,12 +202,7 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
       }
       const bearing = vehicleBearing(vehicle, marker.nakoVehicle);
       vehicle = { ...vehicle, bearing };
-      marker.setIcon({
-        path: CAR_PATH, rotation: bearing, scale: vehicle.type === "bus" ? 1.6 : 1.4,
-        fillColor: VEHICLE_COLORS[vehicle.type] || VEHICLE_COLORS.kombi,
-        fillOpacity: 1, strokeColor: "#102b46", strokeWeight: 1.8,
-        anchor: new globalThis.google.maps.Point(0, 0)
-      });
+      marker.setIcon(vehicleIcon(vehicle.type, bearing));
       marker.nakoVehicle = vehicle;
       moveMarker(marker, vehicle);
       const routeMatch = highlightedRoute === "all" || (vehicle.routeIds || []).includes(highlightedRoute);
@@ -195,6 +216,8 @@ export function createGoogleVehicleLayer(mapAdapter, { onSelect } = {}) {
     setSelected(id) { selected = id; sync(latest); },
     setHighlightedRoute(id) { highlightedRoute = id || "all"; sync(latest); },
     clear() {
+      disposed = true;
+      rotatedIcons.clear();
       globalThis.google.maps.event.removeListener(zoomListener);
       for (const marker of markers.values()) {
         if (marker.nakoAnimation) cancelAnimationFrame(marker.nakoAnimation);
